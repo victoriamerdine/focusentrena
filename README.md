@@ -6,20 +6,24 @@ Google Sheet "PLAN MUSCULOS Y PATRONES", a partir de la estructura de la hoja
 
 ## Cómo funciona
 
-1. Cada alumno tiene su propia pestaña en el Sheet, duplicada de **Template Rutina**.
+1. Cada alumno tiene su propia pestaña en el Sheet, duplicada de **Template Rutina**,
+   con su nombre en la celda **B2** y el tipo de plan ("Musculo"/"Patrones") en **B4**.
 2. Un Google Apps Script (`apps-script/Code.gs`), publicado como Web App, expone
-   `GET {WEB_APP_URL}?id=<slug-de-la-pestaña>` y devuelve el JSON de esa rutina.
-3. El frontend (Next.js, exportado como sitio estático) sirve `/r/<slug>` y
+   `GET {WEB_APP_URL}?id=<valor de B2>` y devuelve el JSON de esa rutina.
+3. El frontend (Next.js, exportado como sitio estático) sirve `/r/<id>` y
    pide los datos a ese Web App en el navegador del alumno — siempre al día,
    sin rebuild, porque lee el Sheet en el momento.
 4. El sitio se hostea gratis en Firebase Hosting.
 
-El `id`/slug de cada alumno es el nombre de su pestaña "normalizado":
-minúsculas, sin acentos, espacios → guiones. Por ejemplo la pestaña
-`Juan Pérez` queda en `focusentrena.web.app/r/juan-perez`.
+El `id` de cada alumno es exactamente el valor de la celda **B2** de su hoja
+(coincidencia exacta). Por ejemplo si B2 dice `Juan Perez`, su link es
+`focusentrena.web.app/r/Juan%20Perez`. Evitá tildes/espacios raros en B2 si
+querés links más prolijos.
 
-> El nombre del alumno se toma de la celda **B2** de su hoja. Si la dejás
-> vacía, se usa el nombre de la pestaña como respaldo.
+`apps-script/Code.gs` también incluye `filterPatterns` y `configurarColumnaA`,
+la automatización que ya tenías para los desplegables de Patrón/Músculo y
+Ejercicio, y el auto-completado del link de video — no se tocaron, sólo se
+agregó la parte que responde al frontend.
 
 ---
 
@@ -62,8 +66,7 @@ npm install
 npm run dev
 ```
 
-Abrí `http://localhost:3000/r/<slug-de-un-alumno>` para probar (usá el nombre
-de una pestaña real, normalizado — ver regla arriba).
+Abrí `http://localhost:3000/r/<valor-de-B2-de-un-alumno>` para probar.
 
 ---
 
@@ -118,7 +121,7 @@ apps-script/
 
 ## Notas y límites del MVP
 
-- No hay login: cualquiera con el link `/r/<slug>` puede ver esa rutina
+- No hay login: cualquiera con el link `/r/<id>` puede ver esa rutina
   (no hay datos sensibles más allá de la rutina de gimnasio).
 - El botón "🎥 Ver Video" solo aparece si la columna **Referencia** (H) tiene
   un link cargado (texto plano, hipervínculo o `=HYPERLINK(...)`).

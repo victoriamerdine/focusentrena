@@ -1,164 +1,305 @@
 /**
- * Focus Entrena — API de rutinas
+ * Focus Entrena — Apps Script
  *
- * Este script debe adjuntarse al Google Sheet "PLAN MUSCULOS Y PATRONES"
- * (Extensiones > Apps Script) y publicarse como Web App (ver README.md).
+ * Este archivo va pegado en el editor de Apps Script del Google Sheet
+ * (Extensiones > Apps Script), reemplazando Code.gs por completo.
  *
- * Contrato:
- *   GET {WEB_APP_URL}?id=<slug-de-la-hoja>
+ * Contiene dos partes:
+ *  1) Automatización del lado del entrenador (ya existente):
+ *     - filterPatterns(e): trigger onEdit que arma los desplegables de
+ *       Patrón/Músculo (col. A) y Ejercicio (col. B), y auto-completa el
+ *       link de video (col. H) buscando en "EjerciciosConsolidado".
+ *     - configurarColumnaA(): arma la lista de valores permitidos en A8:A1000.
+ *  2) API para el frontend (Next.js):
+ *     - doGet(e): Web App que devuelve la rutina de un alumno en JSON.
+ *
+ * Contrato del Web App:
+ *   GET {WEB_APP_URL}?id=<valor de la celda B2 del alumno>
  *   -> 200 { alumno, tipoPlan, dias: [{ nombre, ejercicios: [...] }] }
  *   -> 200 { error: "not_found" | "missing_id" }
- *
- * El "id" es el nombre de la pestaña pasado por slugify(). Cualquier hoja
- * nueva creada a partir de "Template Rutina" queda disponible automáticamente,
- * sin tocar este script.
  */
 
+var SPREADSHEET_ID = "10poNqi6ASxO6bP0bnjfIEgV3_eGR1qiZuubuHfd8eHk";
 var DAY_REGEX = /^d[ií]a\s*\d+/i;
-var IGNORED_SHEETS = ["template rutina"];
+
+// ============================================================
+// 1) AUTOMATIZACIÓN DEL SHEET (entrenador) — sin cambios
+// ============================================================
+
+function filterPatterns(e) {
+
+  const hoja = e.range.getSheet();
+
+  // Ejecutar solo en hojas de rutinas
+  if (!hoja.getName().includes("Rutina")) return;
+
+  if (e.range.getA1Notation() === "B4") {
+    configurarColumnaA();
+  }
+
+  const fila = e.range.getRow();
+  const columna = e.range.getColumn();
+
+  if (fila < 6) return;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+
+  const datos = base.getDataRange().getValues();
+
+  // B4 contiene Patrones o Musculo
+  const tipoPlan = hoja.getRange("B4").getValue();
+
+  // ==========
+  // COLUMNA A
+  // ==========
+  if (columna === 1) {
+
+    const valorSeleccionado = hoja.getRange(fila, 1).getValue();
+
+    const celdaEjercicio = hoja.getRange(fila, 2);
+    const celdaVideo = hoja.getRange(fila, 8);
+
+    celdaEjercicio.clearContent();
+    celdaEjercicio.clearDataValidations();
+    celdaVideo.clearContent();
+
+    if (!valorSeleccionado) return;
+
+    let ejercicios = [];
+
+    if (tipoPlan === "Patrones") {
+
+      ejercicios = [
+        ...new Set(
+          datos
+            .filter(r => r[1] === valorSeleccionado) // Categoría
+            .map(r => r[3]) // Ejercicio
+            .filter(String)
+        )
+      ];
+
+    } else if (tipoPlan === "Musculo") {
+
+      ejercicios = [
+        ...new Set(
+          datos
+            .filter(r => r[2] === valorSeleccionado) // Músculo
+            .map(r => r[3]) // Ejercicio
+            .filter(String)
+        )
+      ];
+
+    }
+
+    if (ejercicios.length === 0) return;
+
+    const regla = SpreadsheetApp.newDataValidation()
+      .requireValueInList(ejercicios, true)
+      .setAllowInvalid(false)
+      .build();
+
+    celdaEjercicio.setDataValidation(regla);
+  }
+
+  // ==========
+  // COLUMNA B
+  // ==========
+  if (columna === 2) {
+
+    const ejercicio = hoja.getRange(fila, 2).getValue();
+
+    const celdaVideo = hoja.getRange(fila, 8);
+
+    celdaVideo.clearContent();
+
+    if (!ejercicio) return;
+
+    const encontrado = datos.find(r => r[3] === ejercicio);
+
+    if (!encontrado) return;
+
+    const link = encontrado[4];
+
+    if (!link) return;
+
+    celdaVideo.setFormula(
+      `=HYPERLINK("${link}","🎥 Ver Video")`
+    );
+  }
+}
+
+function configurarColumnaA() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hoja = ss.getActiveSheet();
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+
+  const tipoPlan = hoja.getRange("B4").getValue();
+
+  const datos = base.getDataRange().getValues();
+
+  let lista = [];
+
+  if (tipoPlan === "Patrones") {
+
+    lista = [...new Set(
+      datos
+        .map(r => r[1])
+        .filter(String)
+    )].sort((a, b) =>
+      a.toString().localeCompare(b.toString(), "es")
+    );
+
+  } else if (tipoPlan === "Musculo") {
+
+    lista = [...new Set(
+      datos
+        .map(r => r[2])
+        .filter(String)
+    )].sort((a, b) =>
+      a.toString().localeCompare(b.toString(), "es")
+    );
+
+  }
+
+  const regla = SpreadsheetApp.newDataValidation()
+    .requireValueInList(lista, true)
+    .setAllowInvalid(false)
+    .build();
+
+  hoja.getRange("A8:A1000").setDataValidation(regla);
+}
+
+// ============================================================
+// 2) API PARA EL FRONTEND (Next.js)
+// ============================================================
 
 function doGet(e) {
-  var id = e && e.parameter ? e.parameter.id : null;
+
+  const id = e && e.parameter ? e.parameter.id : null;
 
   if (!id) {
     return jsonResponse({ error: "missing_id" });
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = findSheetBySlug(ss, id);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  if (!sheet) {
+  const hoja = buscarAlumno(id, ss);
+
+  if (!hoja) {
     return jsonResponse({ error: "not_found" });
   }
 
-  var routine = parseRoutine(sheet);
-  return jsonResponse(routine);
+  const rutina = construirRutina(hoja);
+  return jsonResponse(rutina);
 }
 
-function findSheetBySlug(ss, id) {
-  var sheets = ss.getSheets();
-  for (var i = 0; i < sheets.length; i++) {
-    var name = sheets[i].getName();
-    if (IGNORED_SHEETS.indexOf(name.toLowerCase().trim()) !== -1) continue;
-    if (slugify(name) === id) return sheets[i];
+function buscarAlumno(id, ss) {
+
+  const hojas = ss.getSheets();
+
+  for (const hoja of hojas) {
+
+    const codigo = hoja.getRange("B2").getValue();
+
+    if (codigo && String(codigo).trim() === String(id).trim()) {
+      return hoja;
+    }
   }
+
   return null;
 }
 
-function parseRoutine(sheet) {
-  var alumno = String(sheet.getRange("B2").getValue() || "").trim();
-  if (!alumno) alumno = humanizeSheetName(sheet.getName());
+function construirRutina(hoja) {
 
-  var tipoPlan = String(sheet.getRange("B4").getValue() || "").trim();
+  const alumno = String(hoja.getRange("B2").getValue() || "").trim();
+  const tipoPlan = String(hoja.getRange("B4").getValue() || "").trim();
 
-  var lastRow = sheet.getLastRow();
-  var lastCol = Math.max(sheet.getLastColumn(), 8);
+  const lastRow = hoja.getLastRow();
   if (lastRow < 1) {
     return { alumno: alumno, tipoPlan: tipoPlan, dias: [] };
   }
 
-  var values = sheet.getRange(1, 1, lastRow, Math.min(lastCol, 8)).getValues();
-  var dias = [];
-  var currentDay = null;
+  const valores = hoja.getRange(1, 1, lastRow, 8).getValues();
 
-  for (var r = 0; r < values.length; r++) {
-    var row = values[r];
-    var rowNumber = r + 1;
-    var colA = String(row[0] || "").trim();
-    var colB = String(row[1] || "").trim();
+  const dias = [];
+  let diaActual = null;
 
-    var dayLabel = matchDayLabel(colA) || matchDayLabel(colB);
+  for (let r = 0; r < valores.length; r++) {
 
-    if (dayLabel) {
-      currentDay = { nombre: dayLabel, ejercicios: [] };
-      dias.push(currentDay);
+    const fila = valores[r];
+    const filaNumero = r + 1;
+    const colA = String(fila[0] || "").trim();
+    const colB = String(fila[1] || "").trim();
+
+    const etiquetaDia = DAY_REGEX.test(colA) ? colA : (DAY_REGEX.test(colB) ? colB : null);
+
+    if (etiquetaDia) {
+      diaActual = { nombre: etiquetaDia, ejercicios: [] };
+      dias.push(diaActual);
       continue; // la fila siguiente son los encabezados de columna, se saltea sola
     }
 
-    if (!currentDay) continue;
-    if (isHeaderRow(row)) continue;
-    if (isRowEmpty(row)) continue;
+    if (!diaActual) continue;
+    if (esFilaEncabezado(colA, colB)) continue;
+    if (esFilaVacia(fila)) continue;
 
-    currentDay.ejercicios.push({
-      patron: String(row[0] || "").trim(),
-      ejercicio: String(row[1] || "").trim(),
-      series: formatValue(row[2]),
-      repeticiones: formatValue(row[3]),
-      intensidad: formatValue(row[4]),
-      pausas: formatValue(row[5]),
-      notas: String(row[6] || "").trim(),
-      video: extractVideoLink(sheet, rowNumber, 8),
+    diaActual.ejercicios.push({
+      patron: colA,
+      ejercicio: colB,
+      series: formatearValor(fila[2]),
+      repeticiones: formatearValor(fila[3]),
+      intensidad: formatearValor(fila[4]),
+      pausas: formatearValor(fila[5]),
+      notas: String(fila[6] || "").trim(),
+      video: extraerLinkVideo(hoja, filaNumero, 8),
     });
   }
 
   return { alumno: alumno, tipoPlan: tipoPlan, dias: dias };
 }
 
-function matchDayLabel(text) {
-  if (text && DAY_REGEX.test(text)) return text;
-  return null;
+function esFilaEncabezado(colA, colB) {
+  return colA.toLowerCase() === "patrón/músculo" ||
+    colA.toLowerCase() === "patron/musculo" ||
+    colB.toLowerCase() === "ejercicio";
 }
 
-function isHeaderRow(row) {
-  var b = String(row[1] || "").trim().toLowerCase();
-  var c = String(row[2] || "").trim().toLowerCase();
-  return b === "ejercicio" || c === "series";
-}
-
-function isRowEmpty(row) {
-  for (var i = 0; i < row.length; i++) {
-    if (String(row[i] || "").trim() !== "") return false;
+function esFilaVacia(fila) {
+  for (let i = 0; i < fila.length; i++) {
+    if (String(fila[i] || "").trim() !== "") return false;
   }
   return true;
 }
 
-function formatValue(value) {
-  if (value === "" || value === null || value === undefined) return "";
-  if (value instanceof Date) return value.toString();
-  return String(value).trim();
+function formatearValor(valor) {
+  if (valor === "" || valor === null || valor === undefined) return "";
+  if (valor instanceof Date) return valor.toString();
+  return String(valor).trim();
 }
 
-function extractVideoLink(sheet, rowNumber, colNumber) {
-  var cell = sheet.getRange(rowNumber, colNumber);
+function extraerLinkVideo(hoja, fila, columna) {
 
-  var richText = cell.getRichTextValue();
-  if (richText) {
-    var runs = richText.getRuns();
-    for (var i = 0; i < runs.length; i++) {
-      var url = runs[i].getLinkUrl();
-      if (url) return url;
-    }
-    var wholeUrl = richText.getLinkUrl();
-    if (wholeUrl) return wholeUrl;
-  }
+  const celda = hoja.getRange(fila, columna);
 
-  var formula = cell.getFormula();
+  // El link se escribe como =HYPERLINK("url","🎥 Ver Video") desde filterPatterns
+  const formula = celda.getFormula();
   if (formula) {
-    var match = formula.match(/HYPERLINK\(\s*"([^"]+)"/i);
+    const match = formula.match(/HYPERLINK\(\s*"([^"]+)"/i);
     if (match) return match[1];
   }
 
-  var raw = String(cell.getValue() || "").trim();
+  const richText = celda.getRichTextValue();
+  if (richText) {
+    const url = richText.getLinkUrl();
+    if (url) return url;
+  }
+
+  const raw = String(celda.getValue() || "").trim();
   if (/^https?:\/\//i.test(raw)) return raw;
 
   return "";
-}
-
-function humanizeSheetName(name) {
-  return name
-    .replace(/\s*\(\d+\)\s*$/, "")
-    .trim();
-}
-
-function slugify(str) {
-  return str
-    .toString()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 function jsonResponse(obj) {

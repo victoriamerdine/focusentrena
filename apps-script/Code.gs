@@ -10,6 +10,10 @@
  *       Patrón/Músculo (col. A) y Ejercicio (col. B), y auto-completa el
  *       link de video (col. H) buscando en "EjerciciosConsolidado".
  *     - configurarColumnaA(): arma la lista de valores permitidos en A8:A1000.
+ *     - crearNuevaRutina(): duplica "Template Rutina", pide el nombre del
+ *       alumno, lo pone en B2 y nombra la pestaña "<nombre> - Rutina".
+ *     - actualizarDashboard() / actualizarDashboardUnicavez(): arman la hoja
+ *       "Dashboard" con el listado de alumnos y accesos directos.
  *  2) API para el frontend (Next.js):
  *     - doGet(e): Web App que devuelve la rutina de un alumno en JSON.
  *
@@ -169,6 +173,178 @@ function configurarColumnaA() {
     .build();
 
   hoja.getRange("A8:A1000").setDataValidation(regla);
+}
+
+function crearNuevaRutina() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const template = ss.getSheetByName("Template Rutina");
+
+  if (!template) {
+    SpreadsheetApp.getUi().alert(
+      'No existe la hoja "Template Rutina"'
+    );
+    return;
+  }
+
+  const respuesta = SpreadsheetApp.getUi().prompt(
+    "Nueva Rutina",
+    "Ingrese el nombre del alumno:",
+    SpreadsheetApp.getUi().ButtonSet.OK_CANCEL
+  );
+
+  if (
+    respuesta.getSelectedButton() !==
+    SpreadsheetApp.getUi().Button.OK
+  ) {
+    return;
+  }
+
+  const nombreAlumno =
+    respuesta.getResponseText().trim();
+
+  if (!nombreAlumno) {
+    SpreadsheetApp.getUi().alert(
+      "Debe ingresar un nombre."
+    );
+    return;
+  }
+
+  const nombreHoja =
+    `${nombreAlumno} - Rutina`;
+
+  if (ss.getSheetByName(nombreHoja)) {
+    SpreadsheetApp.getUi().alert(
+      "Esa rutina ya existe."
+    );
+    return;
+  }
+
+  const nuevaHoja = template.copyTo(ss);
+
+  nuevaHoja.setName(nombreHoja);
+
+  nuevaHoja.getRange("B2")
+    .setValue(nombreAlumno);
+
+  ss.setActiveSheet(nuevaHoja);
+
+  actualizarDashboard();
+
+}
+
+function actualizarDashboard() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let dashboard = ss.getSheetByName("Dashboard");
+
+  if (!dashboard) {
+    dashboard = ss.insertSheet("Dashboard");
+  }
+
+  dashboard.clear();
+
+  dashboard.getRange("A1").setValue("Rutinas");
+
+  const hojas = ss.getSheets();
+
+  const lista = hojas
+    .filter(h =>
+      ![
+        "Dashboard",
+        "EjerciciosConsolidado",
+        "Datos",
+        "Volumen Meso"
+      ].includes(h.getName())
+    )
+    .map(h => ({
+      nombre: h.getName(),
+      gid: h.getSheetId()
+    }))
+    .sort((a, b) =>
+      a.nombre.localeCompare(
+        b.nombre,
+        "es",
+        { sensitivity: "base" }
+      )
+    );
+
+  const datos = lista.map(h => [
+    h.nombre,
+    `=HYPERLINK("#gid=${h.gid}","Abrir")`
+  ]);
+
+  dashboard
+    .getRange(3, 1, datos.length, 2)
+    .setValues(datos);
+
+}
+
+function actualizarDashboardUnicavez() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let dashboard = ss.getSheetByName("Dashboard");
+
+  if (!dashboard) {
+    dashboard = ss.insertSheet("Dashboard");
+  }
+
+  dashboard.clear();
+
+  dashboard.getRange("A1").setValue("Alumno");
+  dashboard.getRange("B1").setValue("Hoja");
+  dashboard.getRange("C1").setValue("Abrir");
+
+  const excluir = [
+    "Dashboard",
+    "EjerciciosConsolidado",
+    "Datos",
+    "Volumen Meso"
+  ];
+
+  const filas = [];
+
+  ss.getSheets()
+    .filter(h => !excluir.includes(h.getName()))
+    .forEach(h => {
+
+      let alumno = "";
+
+      try {
+        alumno = h.getRange("B2").getValue();
+      } catch (e) {}
+
+      if (!alumno) {
+        alumno = h.getName();
+      }
+
+      filas.push([
+        alumno,
+        h.getName(),
+        `=HYPERLINK("#gid=${h.getSheetId()}","🔗 Abrir")`
+      ]);
+    });
+
+  filas.sort((a, b) =>
+    a[0].toString().localeCompare(
+      b[0].toString(),
+      "es",
+      { sensitivity: "base" }
+    )
+  );
+
+  if (filas.length) {
+
+    dashboard
+      .getRange(2, 1, filas.length, 3)
+      .setValues(filas);
+
+  }
+
+  dashboard.autoResizeColumns(1, 3);
 }
 
 // ============================================================

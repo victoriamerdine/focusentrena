@@ -22,6 +22,9 @@
  *   GET {WEB_APP_URL}?id=<valor de la celda E2 del alumno>
  *   -> 200 { alumno, tipoPlan, dias: [{ nombre, ejercicios: [...] }] }
  *   -> 200 { error: "not_found" | "missing_id" }
+ * Cada ejercicio incluye "grupo": el color de fondo de la fila (hex) si el
+ * entrenador coloreó ese bloque para indicar ejercicios a combinar en la
+ * misma serie, o "" si la fila no tiene color.
  *
  * E2 = id de la rutina (usado en la URL, autogenerado por crearNuevaRutina
  * como slug del nombre, ej. "Pablo Salas" -> "pablo-salas"). B2 = nombre
@@ -468,10 +471,20 @@ function construirRutina(hoja) {
       pausas: formatearValor(fila[5]),
       notas: String(fila[6] || "").trim(),
       video: extraerLinkVideo(hoja, filaNumero, 8),
+      grupo: obtenerColorGrupo(hoja, filaNumero),
     });
   }
 
   return { alumno: alumno, tipoPlan: tipoPlan, dias: dias };
+}
+
+// Color de fondo de la fila (col. A): así el frontend puede agrupar
+// visualmente los ejercicios que el entrenador marcó para combinar en
+// la misma serie (superset). Blanco/sin relleno = sin grupo.
+function obtenerColorGrupo(hoja, fila) {
+  const color = hoja.getRange(fila, 1).getBackground();
+  if (!color || color.toLowerCase() === "#ffffff") return "";
+  return color;
 }
 
 function esFilaEncabezado(colA, colB) {

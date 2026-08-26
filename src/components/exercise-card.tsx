@@ -1,5 +1,6 @@
-import { Flame, Layers, Repeat, StickyNote, Timer, Video } from "lucide-react";
+import { Flame, Layers, Repeat, StickyNote, Timer } from "lucide-react";
 
+import { VideoPreview } from "@/components/video-preview";
 import type { Exercise } from "@/lib/types";
 
 function Stat({
@@ -53,17 +54,7 @@ export function ExerciseCard({ exercise }: { exercise: Exercise }) {
         </div>
       ) : null}
 
-      {exercise.video ? (
-        <a
-          href={exercise.video}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          <Video className="h-4 w-4" strokeWidth={2.5} />
-          Ver Video
-        </a>
-      ) : null}
+      {exercise.video ? <VideoPreview url={exercise.video} /> : null}
     </div>
   );
 }

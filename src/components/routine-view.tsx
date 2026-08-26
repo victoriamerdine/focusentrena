@@ -3,7 +3,7 @@
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { ExerciseCard } from "@/components/exercise-card";
+import { DayExercises } from "@/components/day-exercises";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { APPS_SCRIPT_URL } from "@/lib/config";
 import type { Routine } from "@/lib/types";
@@ -117,7 +117,7 @@ export function RoutineView() {
               {dia.ejercicios.length === 0 ? (
                 <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
               ) : (
-                dia.ejercicios.map((ex, i) => <ExerciseCard key={i} exercise={ex} />)
+                <DayExercises ejercicios={dia.ejercicios} />
               )}
             </TabsContent>
           ))}

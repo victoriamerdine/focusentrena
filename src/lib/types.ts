@@ -7,6 +7,7 @@ export interface Exercise {
   pausas: string;
   notas: string;
   video: string;
+  grupo: string;
 }
 
 export interface Day {

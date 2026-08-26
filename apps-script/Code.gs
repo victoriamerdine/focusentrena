@@ -480,6 +480,21 @@ function doGet(e) {
     return jsonResponse({ error: "missing_id" });
   }
 
+  // Respuesta completa cacheada 90 segundos: una segunda visita al mismo
+  // link poco después de la primera se sirve casi instantánea, sin volver
+  // a tocar el Sheet. 90s es corto como para que un cambio del entrenador
+  // se vea reflejado enseguida, pero evita repetir el trabajo pesado en
+  // visitas seguidas (recargar la página, revisar durante el entreno, etc).
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "rutina_" + id;
+  const cacheado = cache.get(cacheKey);
+
+  if (cacheado) {
+    return ContentService
+      .createTextOutput(cacheado)
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   const hoja = buscarAlumno(id, ss);
@@ -489,7 +504,15 @@ function doGet(e) {
   }
 
   const rutina = construirRutina(hoja);
-  return jsonResponse(rutina);
+  const json = JSON.stringify(rutina);
+
+  if (json.length < 100000) { // límite de CacheService por valor
+    cache.put(cacheKey, json, 90);
+  }
+
+  return ContentService
+    .createTextOutput(json)
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // El índice id -> nombre de hoja se cachea 5 minutos para no tener que

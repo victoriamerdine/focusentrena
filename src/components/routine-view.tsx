@@ -6,12 +6,13 @@ import { useEffect, useState } from "react";
 import { DayExercises } from "@/components/day-exercises";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { APPS_SCRIPT_URL } from "@/lib/config";
+import { readCachedRoutine, writeCachedRoutine } from "@/lib/routine-cache";
 import type { Routine } from "@/lib/types";
 
 type State =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; routine: Routine };
+  | { status: "ready"; routine: Routine; refreshing: boolean };
 
 function getIdFromPath(): string {
   const segments = window.location.pathname.split("/").filter(Boolean);
@@ -39,6 +40,13 @@ export function RoutineView() {
       return;
     }
 
+    // Si ya vimos esta rutina antes en este dispositivo, se muestra al
+    // instante mientras se pide la versión actualizada en segundo plano.
+    const cached = readCachedRoutine(id);
+    if (cached) {
+      setState({ status: "ready", routine: cached, refreshing: true });
+    }
+
     const controller = new AbortController();
 
     fetch(`${APPS_SCRIPT_URL}?id=${encodeURIComponent(id)}`, {
@@ -53,12 +61,18 @@ export function RoutineView() {
               : "No se pudo cargar la rutina."
           );
         }
-        setState({ status: "ready", routine: data as Routine });
+        writeCachedRoutine(id, data as Routine);
+        setState({ status: "ready", routine: data as Routine, refreshing: false });
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        const message = err instanceof Error ? err.message : "No se pudo cargar la rutina.";
-        setState({ status: "error", message });
+        setState((prev) => {
+          // ya había datos en caché mostrados: no los tapamos con un error,
+          // simplemente se deja de intentar actualizar en segundo plano.
+          if (prev.status === "ready") return { ...prev, refreshing: false };
+          const message = err instanceof Error ? err.message : "No se pudo cargar la rutina.";
+          return { status: "error", message };
+        });
       });
 
     return () => controller.abort();
@@ -82,13 +96,14 @@ export function RoutineView() {
     );
   }
 
-  const { routine } = state;
+  const { routine, refreshing } = state;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 pb-16 pt-10 sm:px-6">
       <header className="space-y-1">
-        <p className="text-xs font-bold uppercase tracking-widest text-primary">
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
           Focus Entrena
+          {refreshing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
         </p>
         <h1 className="font-display text-3xl tracking-tight">
           Hola {routine.alumno}

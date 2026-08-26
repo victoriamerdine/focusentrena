@@ -7,23 +7,27 @@ Google Sheet "PLAN MUSCULOS Y PATRONES", a partir de la estructura de la hoja
 ## Cómo funciona
 
 1. Cada alumno tiene su propia pestaña en el Sheet, duplicada de **Template Rutina**,
-   con su nombre en la celda **B2** y el tipo de plan ("Musculo"/"Patrones") en **B4**.
+   con su nombre en **B2**, el tipo de plan ("Musculo"/"Patrones") en **B4**, y
+   un id único (slug) en **E2** que se usa para armar su link.
 2. Un Google Apps Script (`apps-script/Code.gs`), publicado como Web App, expone
-   `GET {WEB_APP_URL}?id=<valor de B2>` y devuelve el JSON de esa rutina.
+   `GET {WEB_APP_URL}?id=<valor de E2>` y devuelve el JSON de esa rutina.
 3. El frontend (Next.js, exportado como sitio estático) sirve `/r/<id>` y
    pide los datos a ese Web App en el navegador del alumno — siempre al día,
    sin rebuild, porque lee el Sheet en el momento.
 4. El sitio se hostea gratis en Firebase Hosting.
 
-El `id` de cada alumno es exactamente el valor de la celda **B2** de su hoja
-(coincidencia exacta). Por ejemplo si B2 dice `Juan Perez`, su link es
-`focusentrena.web.app/r/Juan%20Perez`. Evitá tildes/espacios raros en B2 si
-querés links más prolijos.
+El `id` de cada alumno vive en la celda **E2** de su hoja (coincidencia exacta,
+no se toca B2). `crearNuevaRutina()` lo genera solo a partir del nombre —
+"Pablo Salas" → `pablo-salas` — evitando duplicados, así que el link queda
+limpio (`focusentrena.web.app/r/pablo-salas`) sin depender de lo que escribas
+en B2. Si preferís un id propio, podés editarlo a mano en E2 después de crear
+la rutina.
 
-`apps-script/Code.gs` también incluye `filterPatterns` y `configurarColumnaA`,
-la automatización que ya tenías para los desplegables de Patrón/Músculo y
-Ejercicio, y el auto-completado del link de video — no se tocaron, sólo se
-agregó la parte que responde al frontend.
+`apps-script/Code.gs` también incluye `filterPatterns`, `configurarColumnaA`,
+`crearNuevaRutina`, `actualizarDashboard` y `actualizarDashboardUnicavez` —
+toda la automatización que ya tenías para desplegables, auto-completado de
+video y el listado de alumnos — no se tocaron, sólo se agregó la parte que
+responde al frontend.
 
 ---
 
@@ -35,8 +39,9 @@ agregó la parte que responde al frontend.
 3. Guardá el proyecto (podés llamarlo "Focus Entrena API").
 4. **Implementar → Nueva implementación**:
    - Tipo: **Aplicación web**
-   - Ejecutar como: **Yo (tu cuenta)**
-   - Quién tiene acceso: **Cualquier usuario**
+   - Execute as / Ejecutar como: **Me** (si dejás "User accessing the web app",
+     Google no te va a dejar elegir acceso anónimo)
+   - Who has access / Quién tiene acceso: **Anyone** (no "Anyone with Google account")
 5. Autorizá los permisos que pida (acceso al Sheet).
 6. Copiá la **URL de la aplicación web** (termina en `/exec`). La vas a
    necesitar en el paso 2.
@@ -66,7 +71,7 @@ npm install
 npm run dev
 ```
 
-Abrí `http://localhost:3000/r/<valor-de-B2-de-un-alumno>` para probar.
+Abrí `http://localhost:3000/r/<valor-de-E2-de-un-alumno>` para probar.
 
 ---
 

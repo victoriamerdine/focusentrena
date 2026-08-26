@@ -11,16 +11,21 @@
  *       link de video (col. H) buscando en "EjerciciosConsolidado".
  *     - configurarColumnaA(): arma la lista de valores permitidos en A8:A1000.
  *     - crearNuevaRutina(): duplica "Template Rutina", pide el nombre del
- *       alumno, lo pone en B2 y nombra la pestaña "<nombre> - Rutina".
+ *       alumno, lo pone en B2, genera un id único (slug) en E2 y nombra la
+ *       pestaña "<nombre> - Rutina".
  *     - actualizarDashboard() / actualizarDashboardUnicavez(): arman la hoja
  *       "Dashboard" con el listado de alumnos y accesos directos.
  *  2) API para el frontend (Next.js):
  *     - doGet(e): Web App que devuelve la rutina de un alumno en JSON.
  *
  * Contrato del Web App:
- *   GET {WEB_APP_URL}?id=<valor de la celda B2 del alumno>
+ *   GET {WEB_APP_URL}?id=<valor de la celda E2 del alumno>
  *   -> 200 { alumno, tipoPlan, dias: [{ nombre, ejercicios: [...] }] }
  *   -> 200 { error: "not_found" | "missing_id" }
+ *
+ * E2 = id de la rutina (usado en la URL, autogenerado por crearNuevaRutina
+ * como slug del nombre, ej. "Pablo Salas" -> "pablo-salas"). B2 = nombre
+ * del alumno, solo para mostrar en pantalla.
  */
 
 var SPREADSHEET_ID = "10poNqi6ASxO6bP0bnjfIEgV3_eGR1qiZuubuHfd8eHk";
@@ -228,10 +233,43 @@ function crearNuevaRutina() {
   nuevaHoja.getRange("B2")
     .setValue(nombreAlumno);
 
+  nuevaHoja.getRange("E2")
+    .setValue(generarIdUnico(ss, nombreAlumno));
+
   ss.setActiveSheet(nuevaHoja);
 
   actualizarDashboard();
 
+}
+
+function generarIdUnico(ss, nombre) {
+
+  const base = slugify(nombre);
+
+  const existentes = ss.getSheets()
+    .map(h => String(h.getRange("E2").getValue() || "").trim())
+    .filter(String);
+
+  let id = base;
+  let contador = 2;
+
+  while (existentes.indexOf(id) !== -1) {
+    id = `${base}-${contador}`;
+    contador++;
+  }
+
+  return id;
+}
+
+function slugify(str) {
+  return str
+    .toString()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function actualizarDashboard() {
@@ -377,7 +415,7 @@ function buscarAlumno(id, ss) {
 
   for (const hoja of hojas) {
 
-    const codigo = hoja.getRange("B2").getValue();
+    const codigo = hoja.getRange("E2").getValue();
 
     if (codigo && String(codigo).trim() === String(id).trim()) {
       return hoja;

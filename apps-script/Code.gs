@@ -29,6 +29,12 @@
  * entrenador coloreó ese bloque para indicar ejercicios a combinar en la
  * misma serie, o "" si la fila no tiene color.
  *
+ * Rendimiento: construirRutina() lee valores/fórmulas/rich text/colores en
+ * bloque (unas pocas llamadas totales) en vez de una por fila, y
+ * buscarAlumno() cachea 5 min el índice id -> hoja (CacheService) para no
+ * recorrer todas las pestañas en cada visita. El índice se invalida solo
+ * al crear o borrar una rutina.
+ *
  * E2 = id de la rutina (usado en la URL, autogenerado por crearNuevaRutina
  * como slug del nombre, ej. "Pablo Salas" -> "pablo-salas"). B2 = nombre
  * del alumno, solo para mostrar en pantalla.
@@ -244,6 +250,7 @@ function crearNuevaRutina() {
 
   ss.setActiveSheet(nuevaHoja);
 
+  invalidarIndiceAlumnos();
   actualizarDashboard();
 
 }
@@ -390,6 +397,7 @@ function eliminarRutinasMarcadas() {
     }
   });
 
+  invalidarIndiceAlumnos();
   actualizarDashboard();
 
   ui.alert(`Se eliminaron ${borradas} rutina(s).`);
@@ -484,20 +492,47 @@ function doGet(e) {
   return jsonResponse(rutina);
 }
 
+// El índice id -> nombre de hoja se cachea 5 minutos para no tener que
+// recorrer todas las pestañas (una llamada a la API por cada una) en cada
+// visita. crearNuevaRutina() y eliminarRutinasMarcadas() invalidan el
+// caché al tocar la lista de alumnos, así que nunca queda desactualizado
+// más de un momento.
 function buscarAlumno(id, ss) {
 
-  const hojas = ss.getSheets();
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "indice_alumnos_v1";
 
-  for (const hoja of hojas) {
+  let indice = null;
+  const cacheado = cache.get(cacheKey);
 
-    const codigo = hoja.getRange("E2").getValue();
-
-    if (codigo && String(codigo).trim() === String(id).trim()) {
-      return hoja;
+  if (cacheado) {
+    try {
+      indice = JSON.parse(cacheado);
+    } catch (e) {
+      indice = null;
     }
   }
 
-  return null;
+  if (!indice) {
+    indice = construirIndiceAlumnos(ss);
+    cache.put(cacheKey, JSON.stringify(indice), 300);
+  }
+
+  const nombreHoja = indice[String(id).trim()];
+  return nombreHoja ? ss.getSheetByName(nombreHoja) : null;
+}
+
+function construirIndiceAlumnos(ss) {
+  const indice = {};
+  ss.getSheets().forEach(hoja => {
+    const codigo = String(hoja.getRange("E2").getValue() || "").trim();
+    if (codigo) indice[codigo] = hoja.getName();
+  });
+  return indice;
+}
+
+function invalidarIndiceAlumnos() {
+  CacheService.getScriptCache().remove("indice_alumnos_v1");
 }
 
 function construirRutina(hoja) {
@@ -510,7 +545,14 @@ function construirRutina(hoja) {
     return { alumno: alumno, tipoPlan: tipoPlan, dias: [] };
   }
 
-  const valores = hoja.getRange(1, 1, lastRow, 8).getValues();
+  // Se leen los datos, fórmulas, texto enriquecido y colores en bloque
+  // (4 llamadas totales) en vez de una llamada por fila — con rutinas de
+  // 20-30 filas esto es la diferencia entre ~4 y ~100 llamadas a la API.
+  const rango = hoja.getRange(1, 1, lastRow, 8);
+  const valores = rango.getValues();
+  const formulas = rango.getFormulas();
+  const richTexts = rango.getRichTextValues();
+  const coloresColA = hoja.getRange(1, 1, lastRow, 1).getBackgrounds();
 
   const dias = [];
   let diaActual = null;
@@ -518,7 +560,6 @@ function construirRutina(hoja) {
   for (let r = 0; r < valores.length; r++) {
 
     const fila = valores[r];
-    const filaNumero = r + 1;
     const colA = String(fila[0] || "").trim();
     const colB = String(fila[1] || "").trim();
 
@@ -534,6 +575,8 @@ function construirRutina(hoja) {
     if (esFilaEncabezado(colA, colB)) continue;
     if (esFilaVacia(fila)) continue;
 
+    const color = coloresColA[r][0];
+
     diaActual.ejercicios.push({
       patron: colA,
       ejercicio: colB,
@@ -542,21 +585,12 @@ function construirRutina(hoja) {
       intensidad: formatearValor(fila[4]),
       pausas: formatearValor(fila[5]),
       notas: String(fila[6] || "").trim(),
-      video: extraerLinkVideo(hoja, filaNumero, 8),
-      grupo: obtenerColorGrupo(hoja, filaNumero),
+      video: extraerLinkVideoDeCelda(fila[7], formulas[r][7], richTexts[r][7]),
+      grupo: (!color || color.toLowerCase() === "#ffffff") ? "" : color,
     });
   }
 
   return { alumno: alumno, tipoPlan: tipoPlan, dias: dias };
-}
-
-// Color de fondo de la fila (col. A): así el frontend puede agrupar
-// visualmente los ejercicios que el entrenador marcó para combinar en
-// la misma serie (superset). Blanco/sin relleno = sin grupo.
-function obtenerColorGrupo(hoja, fila) {
-  const color = hoja.getRange(fila, 1).getBackground();
-  if (!color || color.toLowerCase() === "#ffffff") return "";
-  return color;
 }
 
 function esFilaEncabezado(colA, colB) {
@@ -578,24 +612,20 @@ function formatearValor(valor) {
   return String(valor).trim();
 }
 
-function extraerLinkVideo(hoja, fila, columna) {
-
-  const celda = hoja.getRange(fila, columna);
+function extraerLinkVideoDeCelda(valorCelda, formula, richText) {
 
   // El link se escribe como =HYPERLINK("url","🎥 Ver Video") desde filterPatterns
-  const formula = celda.getFormula();
   if (formula) {
     const match = formula.match(/HYPERLINK\(\s*"([^"]+)"/i);
     if (match) return match[1];
   }
 
-  const richText = celda.getRichTextValue();
   if (richText) {
     const url = richText.getLinkUrl();
     if (url) return url;
   }
 
-  const raw = String(celda.getValue() || "").trim();
+  const raw = String(valorCelda || "").trim();
   if (/^https?:\/\//i.test(raw)) return raw;
 
   return "";

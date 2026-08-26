@@ -14,7 +14,10 @@
  *       alumno, lo pone en B2, genera un id único (slug) en E2 y nombra la
  *       pestaña "<nombre> - Rutina".
  *     - actualizarDashboard() / actualizarDashboardUnicavez(): arman la hoja
- *       "Dashboard" con el listado de alumnos y accesos directos.
+ *       "Dashboard" con el listado de alumnos, accesos directos y un
+ *       checkbox por fila para marcar qué rutina borrar.
+ *     - eliminarRutinasMarcadas(): borra las hojas tildadas en el Dashboard
+ *       (pide confirmación antes de borrar).
  *  2) API para el frontend (Next.js):
  *     - doGet(e): Web App que devuelve la rutina de un alumno en JSON.
  *
@@ -285,9 +288,13 @@ function actualizarDashboard() {
     dashboard = ss.insertSheet("Dashboard");
   }
 
+  // Se limpia contenido y formato para no arrastrar columnas fantasma si
+  // alguna vez se convirtió este rango en una Tabla de Sheets (Insertar >
+  // Tabla / clic derecho > Convertir en tabla). Si eso vuelve a pasar,
+  // hay que sacarla a mano (clic en el nombre de la tabla > Convertir en
+  // rango) antes de correr esta función de nuevo.
   dashboard.clear();
-
-  dashboard.getRange("A1").setValue("Rutinas");
+  dashboard.clearFormats();
 
   const hojas = ss.getSheets();
 
@@ -312,15 +319,80 @@ function actualizarDashboard() {
       )
     );
 
+  dashboard
+    .getRange("A1:C1")
+    .setValues([["Alumno", "Abrir", "Eliminar"]])
+    .setFontWeight("bold");
+
+  if (lista.length === 0) return;
+
   const datos = lista.map(h => [
     h.nombre,
     `=HYPERLINK("#gid=${h.gid}","Abrir")`
   ]);
 
   dashboard
-    .getRange(3, 1, datos.length, 2)
+    .getRange(2, 1, datos.length, 2)
     .setValues(datos);
 
+  dashboard
+    .getRange(2, 3, datos.length, 1)
+    .insertCheckboxes();
+
+  dashboard.autoResizeColumns(1, 3);
+}
+
+// Borra las hojas cuyo checkbox esté tildado en la columna "Eliminar" del
+// Dashboard. Pide confirmación antes de borrar y refresca el Dashboard al
+// terminar.
+function eliminarRutinasMarcadas() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const dashboard = ss.getSheetByName("Dashboard");
+
+  if (!dashboard) return;
+
+  const lastRow = dashboard.getLastRow();
+
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert("No hay rutinas en el Dashboard.");
+    return;
+  }
+
+  const filas = dashboard.getRange(2, 1, lastRow - 1, 3).getValues();
+  const aEliminar = filas
+    .filter(fila => fila[2] === true)
+    .map(fila => String(fila[0]).trim())
+    .filter(String);
+
+  if (aEliminar.length === 0) {
+    SpreadsheetApp.getUi().alert("No marcaste ninguna rutina para eliminar.");
+    return;
+  }
+
+  const ui = SpreadsheetApp.getUi();
+
+  const confirmacion = ui.alert(
+    "Eliminar rutinas",
+    `Se van a borrar estas hojas:\n\n${aEliminar.join("\n")}\n\nEsta acción no se puede deshacer. ¿Confirmás?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirmacion !== ui.Button.YES) return;
+
+  let borradas = 0;
+
+  aEliminar.forEach(nombre => {
+    const hoja = ss.getSheetByName(nombre);
+    if (hoja) {
+      ss.deleteSheet(hoja);
+      borradas++;
+    }
+  });
+
+  actualizarDashboard();
+
+  ui.alert(`Se eliminaron ${borradas} rutina(s).`);
 }
 
 function actualizarDashboardUnicavez() {

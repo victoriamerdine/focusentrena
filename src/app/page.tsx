@@ -7,7 +7,7 @@ export default function Home() {
         <Dumbbell className="h-8 w-8 text-primary" strokeWidth={2.5} />
       </div>
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold tracking-tight">FOCUS ENTRENA</h1>
+        <h1 className="font-display text-3xl tracking-tight">FOCUS ENTRENA</h1>
         <p className="max-w-sm text-sm text-muted">
           Ingresá con el link privado que te compartió tu entrenador para ver
           tu rutina.

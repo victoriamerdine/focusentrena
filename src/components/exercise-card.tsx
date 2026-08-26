@@ -14,7 +14,7 @@ function Stat({
 }) {
   if (!value) return null;
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-background/60 px-3 py-2">
+    <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
       <Icon className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} />
       <div className="min-w-0">
         <div className="text-[10px] uppercase tracking-wide text-muted">
@@ -32,7 +32,7 @@ export function ExerciseCard({ exercise }: { exercise: Exercise }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-base font-bold uppercase tracking-tight text-foreground">
+        <h3 className="font-display text-lg uppercase tracking-tight text-foreground">
           {exercise.ejercicio || "Ejercicio"}
         </h3>
         {exercise.patron ? (

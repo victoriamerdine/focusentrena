@@ -10,18 +10,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#0f172a",
-        card: "#1e293b",
+        background: "#000000",
+        card: "#161616",
         primary: {
-          DEFAULT: "#f97316",
-          foreground: "#ffffff",
+          DEFAULT: "#b2ff01",
+          foreground: "#000000",
         },
         foreground: "#ffffff",
-        muted: "#cbd5e1",
-        border: "#334155",
+        muted: "#a3a3a3",
+        border: "#292929",
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "system-ui", "sans-serif"],
       },
     },
   },

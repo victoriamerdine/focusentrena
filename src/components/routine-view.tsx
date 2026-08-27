@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WeekOverview } from "@/components/week-overview";
 import { cn } from "@/lib/utils";
 import { APPS_SCRIPT_URL } from "@/lib/config";
+import { getDaySubtitle, getShortDayLabel } from "@/lib/day-label";
 import { readCachedRoutine, writeCachedRoutine } from "@/lib/routine-cache";
 import type { Routine } from "@/lib/types";
 
@@ -152,20 +153,28 @@ export function RoutineView() {
               <TabsList>
                 {routine.dias.map((dia) => (
                   <TabsTrigger key={dia.nombre} value={dia.nombre}>
-                    {dia.nombre}
+                    {getShortDayLabel(dia.nombre)}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
-              {routine.dias.map((dia) => (
-                <TabsContent key={dia.nombre} value={dia.nombre} className="space-y-3">
-                  {dia.ejercicios.length === 0 ? (
-                    <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
-                  ) : (
-                    <DayExercises ejercicios={dia.ejercicios} />
-                  )}
-                </TabsContent>
-              ))}
+              {routine.dias.map((dia) => {
+                const subtitulo = getDaySubtitle(dia.nombre);
+                return (
+                  <TabsContent key={dia.nombre} value={dia.nombre} className="space-y-3">
+                    {subtitulo ? (
+                      <p className="-mt-1 text-sm font-semibold uppercase tracking-wide text-muted">
+                        {subtitulo}
+                      </p>
+                    ) : null}
+                    {dia.ejercicios.length === 0 ? (
+                      <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
+                    ) : (
+                      <DayExercises ejercicios={dia.ejercicios} />
+                    )}
+                  </TabsContent>
+                );
+              })}
             </Tabs>
           )}
         </>

@@ -14,10 +14,11 @@ function StatLine({
 }) {
   if (!value) return null;
   return (
-    <div className="flex items-center gap-1.5 text-sm text-muted">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.5} />
-      <span className="font-semibold text-foreground">{label}:</span>
-      <span className="truncate">{value}</span>
+    <div className="flex items-start gap-1.5 text-sm text-muted">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.5} />
+      <span className="min-w-0 break-words">
+        <span className="font-semibold text-foreground">{label}:</span> {value}
+      </span>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Play, Video } from "lucide-react";
+import { Play, Video, X } from "lucide-react";
 import { useState } from "react";
 
 function getYouTubeId(url: string): string | null {
@@ -11,7 +11,7 @@ function getYouTubeId(url: string): string | null {
 }
 
 export function VideoPreview({ url }: { url: string }) {
-  const [playing, setPlaying] = useState(false);
+  const [open, setOpen] = useState(false);
   const videoId = getYouTubeId(url);
 
   if (!videoId) {
@@ -20,10 +20,10 @@ export function VideoPreview({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        className="flex h-24 w-20 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground sm:h-28 sm:w-24"
+        aria-label="Ver video"
       >
-        <Video className="h-4 w-4" strokeWidth={2.5} />
-        Ver Video
+        <Video className="h-5 w-5" strokeWidth={2.5} />
       </a>
     );
   }
@@ -31,38 +31,54 @@ export function VideoPreview({ url }: { url: string }) {
   const isShort = url.includes("/shorts/");
 
   return (
-    <div
-      className={`relative mt-4 overflow-hidden rounded-xl bg-black ${
-        isShort ? "aspect-[9/16] max-w-[220px]" : "aspect-video"
-      }`}
-    >
-      {playing ? (
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1`}
-          className="h-full w-full"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowFullScreen
-          title="Video del ejercicio"
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="group relative block h-24 w-20 shrink-0 overflow-hidden rounded-lg bg-black sm:h-28 sm:w-24"
+        aria-label="Reproducir video"
+      >
+        <img
+          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
+          alt=""
+          className="h-full w-full object-cover"
         />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setPlaying(true)}
-          className="group block h-full w-full"
-          aria-label="Reproducir video"
-        >
-          <img
-            src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-          <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/40">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
-              <Play className="h-5 w-5 translate-x-0.5" fill="currentColor" />
-            </span>
+        <span className="absolute inset-0 flex items-center justify-center bg-black/30 transition-colors group-hover:bg-black/40">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+            <Play className="h-3.5 w-3.5 translate-x-0.5" fill="currentColor" />
           </span>
-        </button>
-      )}
-    </div>
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className={`relative w-full max-w-xs overflow-hidden rounded-xl bg-black ${
+              isShort ? "aspect-[9/16]" : "aspect-video"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <iframe
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1`}
+              className="h-full w-full"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              title="Video del ejercicio"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }

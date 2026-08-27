@@ -5,9 +5,13 @@ import { useEffect, useState } from "react";
 
 import { DayExercises } from "@/components/day-exercises";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WeekOverview } from "@/components/week-overview";
+import { cn } from "@/lib/utils";
 import { APPS_SCRIPT_URL } from "@/lib/config";
 import { readCachedRoutine, writeCachedRoutine } from "@/lib/routine-cache";
 import type { Routine } from "@/lib/types";
+
+type Vista = "dia" | "semana";
 
 type State =
   | { status: "loading" }
@@ -23,6 +27,7 @@ function getIdFromPath(): string {
 
 export function RoutineView() {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [vista, setVista] = useState<Vista>("dia");
 
   useEffect(() => {
     const id = getIdFromPath();
@@ -118,25 +123,52 @@ export function RoutineView() {
       {routine.dias.length === 0 ? (
         <p className="text-sm text-muted">Todavía no hay días cargados en esta rutina.</p>
       ) : (
-        <Tabs defaultValue={routine.dias[0].nombre}>
-          <TabsList>
-            {routine.dias.map((dia) => (
-              <TabsTrigger key={dia.nombre} value={dia.nombre}>
-                {dia.nombre}
-              </TabsTrigger>
+        <>
+          <div className="flex gap-2">
+            {(
+              [
+                ["dia", "Por día"],
+                ["semana", "Semana completa"],
+              ] as const
+            ).map(([valor, etiqueta]) => (
+              <button
+                key={valor}
+                type="button"
+                onClick={() => setVista(valor)}
+                className={cn(
+                  "rounded-full border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors",
+                  vista === valor && "border-primary bg-primary text-primary-foreground"
+                )}
+              >
+                {etiqueta}
+              </button>
             ))}
-          </TabsList>
+          </div>
 
-          {routine.dias.map((dia) => (
-            <TabsContent key={dia.nombre} value={dia.nombre} className="space-y-3">
-              {dia.ejercicios.length === 0 ? (
-                <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
-              ) : (
-                <DayExercises ejercicios={dia.ejercicios} />
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
+          {vista === "semana" ? (
+            <WeekOverview dias={routine.dias} />
+          ) : (
+            <Tabs defaultValue={routine.dias[0].nombre}>
+              <TabsList>
+                {routine.dias.map((dia) => (
+                  <TabsTrigger key={dia.nombre} value={dia.nombre}>
+                    {dia.nombre}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {routine.dias.map((dia) => (
+                <TabsContent key={dia.nombre} value={dia.nombre} className="space-y-3">
+                  {dia.ejercicios.length === 0 ? (
+                    <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
+                  ) : (
+                    <DayExercises ejercicios={dia.ejercicios} />
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </>
       )}
     </main>
   );

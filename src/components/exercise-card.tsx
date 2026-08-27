@@ -3,7 +3,7 @@ import { Flame, Layers, Repeat, StickyNote, Timer } from "lucide-react";
 import { VideoPreview } from "@/components/video-preview";
 import type { Exercise } from "@/lib/types";
 
-function Stat({
+function StatLine({
   icon: Icon,
   label,
   value,
@@ -14,45 +14,54 @@ function Stat({
 }) {
   if (!value) return null;
   return (
-    <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
-      <Icon className="h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} />
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide text-muted">
-          {label}
-        </div>
-        <div className="truncate text-sm font-semibold text-foreground">
-          {value}
-        </div>
-      </div>
+    <div className="flex items-center gap-1.5 text-sm text-muted">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.5} />
+      <span className="font-semibold text-foreground">{label}:</span>
+      <span className="truncate">{value}</span>
     </div>
   );
 }
 
-export function ExerciseCard({ exercise }: { exercise: Exercise }) {
+export function ExerciseCard({
+  exercise,
+  badge,
+}: {
+  exercise: Exercise;
+  badge?: string;
+}) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="mb-3">
-        <h3 className="font-display text-lg uppercase tracking-tight text-foreground">
-          {exercise.ejercicio || "Ejercicio"}
-        </h3>
-        {exercise.patron ? (
-          <p className="text-sm text-primary">{exercise.patron}</p>
+    <div className="flex h-full gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <div className="min-w-0 flex-1">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-display text-base uppercase leading-tight tracking-tight text-foreground">
+              {exercise.ejercicio || "Ejercicio"}
+            </h3>
+            {exercise.patron ? (
+              <p className="text-sm text-primary">{exercise.patron}</p>
+            ) : null}
+          </div>
+          {badge ? (
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+              {badge}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="space-y-1">
+          <StatLine icon={Layers} label="Series" value={exercise.series} />
+          <StatLine icon={Repeat} label="Repeticiones" value={exercise.repeticiones} />
+          <StatLine icon={Flame} label="Intensidad" value={exercise.intensidad} />
+          <StatLine icon={Timer} label="Pausa" value={exercise.pausas} />
+        </div>
+
+        {exercise.notas ? (
+          <div className="mt-2 flex items-start gap-1.5 text-sm text-muted">
+            <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.5} />
+            <span>{exercise.notas}</span>
+          </div>
         ) : null}
       </div>
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat icon={Layers} label="Series" value={exercise.series} />
-        <Stat icon={Repeat} label="Repeticiones" value={exercise.repeticiones} />
-        <Stat icon={Flame} label="Intensidad" value={exercise.intensidad} />
-        <Stat icon={Timer} label="Pausa" value={exercise.pausas} />
-      </div>
-
-      {exercise.notas ? (
-        <div className="mt-3 flex items-start gap-2 text-sm text-muted">
-          <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-primary" strokeWidth={2.5} />
-          <span>{exercise.notas}</span>
-        </div>
-      ) : null}
 
       {exercise.video ? <VideoPreview url={exercise.video} /> : null}
     </div>

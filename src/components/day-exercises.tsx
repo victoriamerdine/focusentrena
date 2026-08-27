@@ -6,14 +6,10 @@ export function DayExercises({ ejercicios }: { ejercicios: Exercise[] }) {
   const groups = groupExercises(ejercicios);
 
   return (
-    <>
+    <div className="space-y-4">
       {groups.map((group, gi) =>
         group.label ? (
-          <div
-            key={gi}
-            className="rounded-2xl border-2 p-3"
-            style={{ borderColor: group.color ?? undefined }}
-          >
+          <div key={gi}>
             <div
               className="mb-2 flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-wide"
               style={{ color: group.color ?? undefined }}
@@ -22,11 +18,13 @@ export function DayExercises({ ejercicios }: { ejercicios: Exercise[] }) {
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: group.color ?? undefined }}
               />
-              {group.label} · combinar en la misma serie
+              {group.label} · alterná estos ejercicios
             </div>
-            <div className="space-y-3">
+            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
               {group.items.map((ex, i) => (
-                <ExerciseCard key={i} exercise={ex} />
+                <div key={i} className="w-[82%] shrink-0 snap-start sm:w-[380px]">
+                  <ExerciseCard exercise={ex} badge={String(i + 1)} />
+                </div>
               ))}
             </div>
           </div>
@@ -34,6 +32,6 @@ export function DayExercises({ ejercicios }: { ejercicios: Exercise[] }) {
           group.items.map((ex, i) => <ExerciseCard key={`${gi}-${i}`} exercise={ex} />)
         )
       )}
-    </>
+    </div>
   );
 }

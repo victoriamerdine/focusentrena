@@ -721,11 +721,15 @@ function construirRutina(hoja) {
   // Se leen los datos, fórmulas y texto enriquecido en bloque (3 llamadas
   // totales) en vez de una llamada por fila — con rutinas de 20-30 filas
   // esto es la diferencia entre ~3 y ~100 llamadas a la API. Columna I =
-  // Agrupador (ver PALETA_GRUPOS más arriba).
+  // Agrupador (ver PALETA_GRUPOS más arriba). También se lee el color de
+  // fondo de la columna A: es retrocompatibilidad con rutinas viejas que
+  // agrupaban pintando la fila a mano, antes de que existiera la columna
+  // Agrupador (ver aplicarRetrocompatibilidadDeGrupos).
   const rango = hoja.getRange(1, 1, lastRow, 9);
   const valores = rango.getValues();
   const formulas = rango.getFormulas();
   const richTexts = rango.getRichTextValues();
+  const coloresColA = hoja.getRange(1, 1, lastRow, 1).getBackgrounds();
 
   const dias = [];
   let diaActual = null;
@@ -748,6 +752,9 @@ function construirRutina(hoja) {
     if (esFilaEncabezado(colA, colB)) continue;
     if (esFilaVacia(fila)) continue;
 
+    const colorFondo = coloresColA[r][0];
+    const colorLegado = (!colorFondo || colorFondo.toLowerCase() === "#ffffff") ? "" : colorFondo;
+
     diaActual.ejercicios.push({
       patron: colA,
       ejercicio: colB,
@@ -758,23 +765,62 @@ function construirRutina(hoja) {
       notas: String(fila[6] || "").trim(),
       video: extraerLinkVideoDeCelda(fila[7], formulas[r][7], richTexts[r][7]),
       agrupador: formatearValor(fila[8]),
-      grupo: "", // lo completa coloreaGruposPorDia() más abajo
+      grupo: "", // lo completa aplicarRetrocompatibilidadDeGrupos() más abajo
+      _colorLegado: colorLegado, // temporal, no queda en la respuesta final
     });
   }
 
-  colorearGruposPorDia(dias);
+  aplicarRetrocompatibilidadDeGrupos(dias);
 
   return { alumno: alumno, tipoPlan: tipoPlan, dias: dias };
 }
 
-// Dentro de cada día, a cada valor distinto de "agrupador" (en el orden
-// en que aparece) se le asigna un color de PALETA_GRUPOS. Vacío = sin
-// grupo. Como es puramente a partir del valor de la celda (no del
-// formato), nunca puede quedar "sin pintar".
-function colorearGruposPorDia(dias) {
+// Dentro de cada día:
+//  - si el ejercicio tiene "agrupador" (columna I), su color sale de
+//    PALETA_GRUPOS según el número (ver colorParaAgrupador).
+//  - si NO tiene agrupador pero la fila todavía tiene un color de fondo
+//    de cuando se agrupaba a mano (antes de que existiera la columna
+//    Agrupador), se sigue mostrando agrupado con ESE color tal cual —
+//    y además se le precarga un número de agrupador "de mentira" (que no
+//    choca con ningún agrupador real que ya exista en el día) para que
+//    el panel del entrenador lo muestre ya cargado; si el entrenador
+//    guarda ese día sin tocar nada más, ese número queda escrito de
+//    verdad en la columna Agrupador y la fila queda migrada.
+function aplicarRetrocompatibilidadDeGrupos(dias) {
   dias.forEach(dia => {
+
+    const usados = {};
     dia.ejercicios.forEach(ex => {
-      ex.grupo = colorParaAgrupador(ex.agrupador);
+      const n = parseInt(String(ex.agrupador || "").trim(), 10);
+      if (!isNaN(n) && n > 0) usados[n] = true;
+    });
+
+    let candidato = 1;
+    function siguienteDisponible() {
+      while (usados[candidato]) candidato++;
+      usados[candidato] = true;
+      return candidato;
+    }
+
+    const numeroPorColorLegado = {};
+
+    dia.ejercicios.forEach(ex => {
+
+      if (ex.agrupador) {
+        ex.grupo = colorParaAgrupador(ex.agrupador);
+        delete ex._colorLegado;
+        return;
+      }
+
+      if (ex._colorLegado) {
+        if (!(ex._colorLegado in numeroPorColorLegado)) {
+          numeroPorColorLegado[ex._colorLegado] = siguienteDisponible();
+        }
+        ex.agrupador = String(numeroPorColorLegado[ex._colorLegado]);
+        ex.grupo = ex._colorLegado; // se ve igual que antes hasta que se guarde
+      }
+
+      delete ex._colorLegado;
     });
   });
 }

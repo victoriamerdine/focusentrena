@@ -105,23 +105,68 @@ correcta aunque no exista un archivo físico con ese nombre.
 
 ---
 
+## 4. Panel del entrenador (`/entrenador`)
+
+Página protegida por contraseña para crear, editar y borrar rutinas desde el
+navegador, sin tocar el Sheet a mano. Sigue usando el Sheet como única fuente
+de datos — solo agrega una forma de escribirlo desde la web.
+
+**Activarlo (una sola vez):**
+
+1. En el editor de Apps Script, ejecutá la función `configurarPasswordEntrenador`
+   (menú de funciones arriba → elegila → ▶ Ejecutar). Te va a pedir la
+   contraseña que quieras usar y la guarda en las Propiedades del Script (no
+   queda en el código ni en git).
+2. Volvé a implementar una nueva versión del Web App (mismos pasos del punto 1
+   de este README) para que `doPost` quede publicado.
+3. Entrá a `focus-entrena.web.app/entrenador`, ingresá esa contraseña.
+
+**Qué se puede hacer ahí:**
+- Crear un alumno nuevo (nombre + tipo de plan) — arma la hoja sola, como
+  `crearNuevaRutina()`.
+- Editar nombre/tipo de plan de un alumno existente.
+- Editar los ejercicios de cada día: agregar, sacar, cambiar patrón/músculo
+  y ejercicio (con los mismos desplegables que arma `EjerciciosConsolidado`),
+  series/repeticiones/intensidad/pausas/notas, y el color para agrupar
+  ejercicios "a combinar en la misma serie".
+- Borrar un alumno.
+
+**Límite a tener en cuenta:** guardar los ejercicios de un día nunca inserta
+ni borra filas del Sheet (para no arriesgar romper fórmulas de las columnas
+de la derecha) — reescribe dentro de las filas que ya existen entre ese día y
+el siguiente. Si un día del medio (no el último de la hoja) se queda sin
+lugar, la página avisa con un error pidiendo agregar filas a mano en esa
+sección del Sheet antes de reintentar. El último día de la hoja no tiene ese
+límite.
+
+La contraseña es simple (no es un login "de verdad" con Google) — alcanza
+para que solo vos entres, pero no la compartas ni la dejes en un lugar
+público.
+
+---
+
 ## Estructura del proyecto
 
 ```
 src/
   app/
-    page.tsx            → landing mínima
-    r/[id]/page.tsx      → shell estático de la rutina (dynamicParams=false)
+    page.tsx              → landing mínima
+    r/[id]/page.tsx        → shell estático de la rutina (dynamicParams=false)
+    entrenador/page.tsx     → panel del entrenador (protegido por contraseña)
     layout.tsx, globals.css
   components/
-    routine-view.tsx     → fetch + estados (loading/error/ready)
-    exercise-card.tsx     → card de cada ejercicio
-    ui/tabs.tsx           → tabs de días (Radix)
+    routine-view.tsx       → fetch + estados (loading/error/ready), vista alumno
+    exercise-card.tsx       → card de cada ejercicio (vista alumno)
+    ui/tabs.tsx              → tabs de días (Radix)
+    admin/                    → panel del entrenador (login, dashboard, editor)
   lib/
-    types.ts              → Routine / Day / Exercise
-    config.ts              → NEXT_PUBLIC_APPS_SCRIPT_URL
+    types.ts                  → Routine / Day / Exercise
+    admin-types.ts              → AlumnoResumen / Catalogo
+    admin-api.ts                  → cliente del doPost (crear/editar/borrar/guardar)
+    admin-auth.ts                  → contraseña del entrenador en localStorage
+    config.ts                       → NEXT_PUBLIC_APPS_SCRIPT_URL
 apps-script/
-  Code.gs                  → API que lee el Sheet y arma el JSON
+  Code.gs                            → API pública (doGet) + de administración (doPost)
 ```
 
 ## Notas y límites del MVP

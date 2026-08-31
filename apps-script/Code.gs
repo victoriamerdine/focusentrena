@@ -886,13 +886,21 @@ function manejarObtenerCatalogo(ss) {
   const porMusculoSet = {};
   const videosPorEjercicio = {};
 
+  // Encabezados que a veces quedan mezclados en los datos (fila de título
+  // repetida, con o sin tilde) — se ignoran como si fueran un patrón o
+  // músculo más.
+  const ENCABEZADOS_IGNORADOS = ["categoría", "categoria", "músculo", "musculo"];
+
   for (let i = 0; i < datos.length; i++) {
 
     const fila = datos[i];
-    const categoria = String(fila[1] || "").trim();
-    const musculo = String(fila[2] || "").trim();
+    let categoria = String(fila[1] || "").trim();
+    let musculo = String(fila[2] || "").trim();
     const ejercicio = String(fila[3] || "").trim();
     const link = String(fila[4] || "").trim();
+
+    if (ENCABEZADOS_IGNORADOS.indexOf(categoria.toLowerCase()) !== -1) categoria = "";
+    if (ENCABEZADOS_IGNORADOS.indexOf(musculo.toLowerCase()) !== -1) musculo = "";
 
     if (!ejercicio) continue;
 

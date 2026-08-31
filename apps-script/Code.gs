@@ -594,6 +594,20 @@ function invalidarListaAlumnos() {
   CacheService.getScriptCache().remove("lista_alumnos_v1");
 }
 
+// Vacía a mano todos los cachés del panel del entrenador (índice de
+// alumnos, lista de alumnos y catálogo de ejercicios). Normalmente no
+// hace falta — se invalidan solos al crear/editar/borrar un alumno — pero
+// es útil después de cambiar la lógica que arma alguno de ellos (por
+// ejemplo el catálogo), para ver el resultado nuevo al toque en vez de
+// esperar a que venza el caché viejo. Correr desde el editor (▶ Run),
+// no hace falta contexto de UI.
+function limpiarCacheEntrenador() {
+  const cache = CacheService.getScriptCache();
+  cache.remove("indice_alumnos_v1");
+  cache.remove("lista_alumnos_v1");
+  cache.remove("catalogo_v1");
+}
+
 function construirRutina(hoja) {
 
   const alumno = String(hoja.getRange("B2").getValue() || "").trim();

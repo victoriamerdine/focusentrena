@@ -46,7 +46,19 @@ export function DayEditor({
   }
 
   function agregarEjercicio() {
-    setEjercicios((prev) => [...prev, { ...EJERCICIO_VACIO }]);
+    setEjercicios((prev) => {
+      // a partir del segundo ejercicio, Series/Repeticiones/Intensidad
+      // arrancan con los mismos valores que el anterior — la mayoría de
+      // las veces se repiten dentro del mismo día, así se ahorra tipearlos.
+      const anterior = prev[prev.length - 1];
+      const nuevo: Exercise = {
+        ...EJERCICIO_VACIO,
+        series: anterior?.series ?? "",
+        repeticiones: anterior?.repeticiones ?? "",
+        intensidad: anterior?.intensidad ?? "",
+      };
+      return [...prev, nuevo];
+    });
   }
 
   async function guardar() {

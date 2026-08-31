@@ -37,11 +37,19 @@
  * Contrato del Web App (escritura, panel del entrenador): ver el comentario
  * arriba de la sección 3, más abajo en este archivo.
  *
- * Rendimiento: construirRutina() lee valores/fórmulas/rich text/colores en
- * bloque (unas pocas llamadas totales) en vez de una por fila, y
- * buscarAlumno() cachea 5 min el índice id -> hoja (CacheService) para no
- * recorrer todas las pestañas en cada visita. El índice se invalida solo
- * al crear o borrar una rutina.
+ * Rendimiento:
+ *  - construirRutina() lee valores/fórmulas/rich text/colores en bloque
+ *    (unas pocas llamadas totales) en vez de una por fila.
+ *  - El índice id -> hoja (obtenerIndiceAlumnos) se cachea 5 min y lo
+ *    comparten buscarAlumno() y generarIdUnico(), así crear un alumno no
+ *    recorre todas las pestañas leyendo E2 una por una.
+ *  - manejarListarAlumnos() lee B2/B4/E2 de cada hoja en una sola llamada
+ *    (no tres) y cachea la lista 60s.
+ *  - manejarObtenerCatalogo() arma las listas del desplegable con objetos
+ *    en vez de array+indexOf (O(n) en vez de O(n²) con ~1400 filas) y
+ *    cachea el resultado 30 min.
+ *  - Todos esos cachés se invalidan solos al crear/editar/borrar un
+ *    alumno, así que nunca quedan desactualizados por mucho tiempo.
  *
  * E2 = id de la rutina (usado en la URL, autogenerado por crearNuevaRutina
  * como slug del nombre, ej. "Pablo Salas" -> "pablo-salas"). B2 = nombre
@@ -264,6 +272,7 @@ function crearHojaRutina(ss, nombreAlumno, tipoPlan) {
   nuevaHoja.getRange("E2").setValue(id);
 
   invalidarIndiceAlumnos();
+  invalidarListaAlumnos();
   actualizarDashboard();
 
   return { hoja: nuevaHoja, id: id, nombreHoja: nombreHoja };
@@ -273,9 +282,10 @@ function generarIdUnico(ss, nombre) {
 
   const base = slugify(nombre);
 
-  const existentes = ss.getSheets()
-    .map(h => String(h.getRange("E2").getValue() || "").trim())
-    .filter(String);
+  // Usa el índice ya cacheado (id -> hoja) en vez de volver a leer E2 de
+  // cada pestaña una por una — con muchos alumnos esa era la parte más
+  // lenta de crear uno nuevo.
+  const existentes = Object.keys(obtenerIndiceAlumnos(ss));
 
   let id = base;
   let contador = 2;
@@ -535,6 +545,15 @@ function doGet(e) {
 // caché al tocar la lista de alumnos, así que nunca queda desactualizado
 // más de un momento.
 function buscarAlumno(id, ss) {
+  const indice = obtenerIndiceAlumnos(ss);
+  const nombreHoja = indice[String(id).trim()];
+  return nombreHoja ? ss.getSheetByName(nombreHoja) : null;
+}
+
+// Índice id -> nombre de hoja, compartido por buscarAlumno() y
+// generarIdUnico() (para no recorrer todas las pestañas dos veces por
+// request). Cacheado 5 minutos.
+function obtenerIndiceAlumnos(ss) {
 
   const cache = CacheService.getScriptCache();
   const cacheKey = "indice_alumnos_v1";
@@ -555,8 +574,7 @@ function buscarAlumno(id, ss) {
     cache.put(cacheKey, JSON.stringify(indice), 300);
   }
 
-  const nombreHoja = indice[String(id).trim()];
-  return nombreHoja ? ss.getSheetByName(nombreHoja) : null;
+  return indice;
 }
 
 function construirIndiceAlumnos(ss) {
@@ -570,6 +588,10 @@ function construirIndiceAlumnos(ss) {
 
 function invalidarIndiceAlumnos() {
   CacheService.getScriptCache().remove("indice_alumnos_v1");
+}
+
+function invalidarListaAlumnos() {
+  CacheService.getScriptCache().remove("lista_alumnos_v1");
 }
 
 function construirRutina(hoja) {
@@ -784,6 +806,18 @@ function doPost(e) {
 
 function manejarListarAlumnos(ss) {
 
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "lista_alumnos_v1";
+  const cacheado = cache.get(cacheKey);
+
+  if (cacheado) {
+    try {
+      return JSON.parse(cacheado);
+    } catch (e) {
+      // sigue de largo y la reconstruye
+    }
+  }
+
   const excluir = [
     "Dashboard",
     "EjerciciosConsolidado",
@@ -792,19 +826,47 @@ function manejarListarAlumnos(ss) {
     "Template Rutina"
   ];
 
-  return ss.getSheets()
+  const resultado = ss.getSheets()
     .filter(h => !excluir.includes(h.getName()))
-    .map(h => ({
-      id: String(h.getRange("E2").getValue() || "").trim(),
-      alumno: String(h.getRange("B2").getValue() || "").trim() || h.getName(),
-      tipoPlan: String(h.getRange("B4").getValue() || "").trim(),
-      hoja: h.getName(),
-    }))
+    .map(h => {
+      // B2, B4 y E2 en una sola lectura por hoja (antes eran 3 llamadas
+      // separadas) — con muchos alumnos esto era lo que más pesaba al
+      // entrar al panel.
+      const bloque = h.getRange(2, 1, 3, 5).getValues();
+      const alumno = String(bloque[0][1] || "").trim(); // B2
+      const tipoPlan = String(bloque[2][1] || "").trim(); // B4
+      const id = String(bloque[0][4] || "").trim(); // E2
+      return {
+        id: id,
+        alumno: alumno || h.getName(),
+        tipoPlan: tipoPlan,
+        hoja: h.getName(),
+      };
+    })
     .filter(a => a.id)
     .sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
+
+  const json = JSON.stringify(resultado);
+  if (json.length < 100000) {
+    cache.put(cacheKey, json, 60);
+  }
+
+  return resultado;
 }
 
 function manejarObtenerCatalogo(ss) {
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "catalogo_v1";
+  const cacheado = cache.get(cacheKey);
+
+  if (cacheado) {
+    try {
+      return JSON.parse(cacheado);
+    } catch (e) {
+      // sigue de largo y lo reconstruye
+    }
+  }
 
   const base = ss.getSheetByName("EjerciciosConsolidado");
 
@@ -815,54 +877,72 @@ function manejarObtenerCatalogo(ss) {
   const datos = base.getDataRange().getValues();
   // columnas: 0=#, 1=Categoría, 2=Músculo, 3=Ejercicio, 4=Link1
 
-  const patrones = new Set();
-  const musculos = new Set();
-  const ejerciciosPorPatron = {};
-  const ejerciciosPorMusculo = {};
+  // Se arma con objetos como "sets" (clave = existe) en vez de arrays +
+  // indexOf: con ~1400 filas, buscar en un array que va creciendo dentro
+  // del propio loop es O(n²) — esto es O(n).
+  const patronesSet = {};
+  const musculosSet = {};
+  const porPatronSet = {};
+  const porMusculoSet = {};
   const videosPorEjercicio = {};
 
-  datos.forEach(fila => {
+  for (let i = 0; i < datos.length; i++) {
 
+    const fila = datos[i];
     const categoria = String(fila[1] || "").trim();
     const musculo = String(fila[2] || "").trim();
     const ejercicio = String(fila[3] || "").trim();
     const link = String(fila[4] || "").trim();
 
-    if (!ejercicio) return;
+    if (!ejercicio) continue;
 
     if (categoria) {
-      patrones.add(categoria);
-      if (!ejerciciosPorPatron[categoria]) ejerciciosPorPatron[categoria] = [];
-      if (ejerciciosPorPatron[categoria].indexOf(ejercicio) === -1) {
-        ejerciciosPorPatron[categoria].push(ejercicio);
-      }
+      patronesSet[categoria] = true;
+      if (!porPatronSet[categoria]) porPatronSet[categoria] = {};
+      porPatronSet[categoria][ejercicio] = true;
     }
 
     if (musculo) {
-      musculos.add(musculo);
-      if (!ejerciciosPorMusculo[musculo]) ejerciciosPorMusculo[musculo] = [];
-      if (ejerciciosPorMusculo[musculo].indexOf(ejercicio) === -1) {
-        ejerciciosPorMusculo[musculo].push(ejercicio);
-      }
+      musculosSet[musculo] = true;
+      if (!porMusculoSet[musculo]) porMusculoSet[musculo] = {};
+      porMusculoSet[musculo][ejercicio] = true;
     }
 
     if (link && !videosPorEjercicio[ejercicio]) {
       videosPorEjercicio[ejercicio] = link;
     }
-  });
+  }
 
   const ordenar = arr => arr.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  const clavesOrdenadas = obj => ordenar(Object.keys(obj));
 
-  Object.keys(ejerciciosPorPatron).forEach(k => ordenar(ejerciciosPorPatron[k]));
-  Object.keys(ejerciciosPorMusculo).forEach(k => ordenar(ejerciciosPorMusculo[k]));
+  const ejerciciosPorPatron = {};
+  Object.keys(porPatronSet).forEach(k => {
+    ejerciciosPorPatron[k] = clavesOrdenadas(porPatronSet[k]);
+  });
 
-  return {
-    patrones: ordenar([...patrones]),
-    musculos: ordenar([...musculos]),
+  const ejerciciosPorMusculo = {};
+  Object.keys(porMusculoSet).forEach(k => {
+    ejerciciosPorMusculo[k] = clavesOrdenadas(porMusculoSet[k]);
+  });
+
+  const resultado = {
+    patrones: clavesOrdenadas(patronesSet),
+    musculos: clavesOrdenadas(musculosSet),
     ejerciciosPorPatron: ejerciciosPorPatron,
     ejerciciosPorMusculo: ejerciciosPorMusculo,
     videosPorEjercicio: videosPorEjercicio,
   };
+
+  // EjerciciosConsolidado cambia poco, así que el caché dura media hora.
+  // Si el catálogo no entra en el límite de 100KB por valor de
+  // CacheService, sigue funcionando igual, simplemente sin cachear.
+  const json = JSON.stringify(resultado);
+  if (json.length < 100000) {
+    cache.put(cacheKey, json, 1800);
+  }
+
+  return resultado;
 }
 
 function manejarCrearAlumno(ss, datos) {
@@ -898,6 +978,7 @@ function manejarActualizarAlumno(ss, datos) {
   }
 
   invalidarIndiceAlumnos();
+  invalidarListaAlumnos();
   invalidarRutinaCache(id);
   actualizarDashboard();
 }
@@ -913,6 +994,7 @@ function manejarEliminarAlumno(ss, datos) {
   ss.deleteSheet(hoja);
 
   invalidarIndiceAlumnos();
+  invalidarListaAlumnos();
   invalidarRutinaCache(id);
   actualizarDashboard();
 }

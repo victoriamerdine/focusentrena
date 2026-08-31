@@ -2,7 +2,6 @@
 
 import { X } from "lucide-react";
 
-import { ColorPicker } from "@/components/admin/color-picker";
 import type { Catalogo } from "@/lib/admin-types";
 import type { Exercise } from "@/lib/types";
 
@@ -70,6 +69,18 @@ export function ExerciseRowEditor({
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card p-3">
       <div className="flex items-start gap-2">
+        <div className="w-16 shrink-0">
+          <label className="mb-1 block text-xs text-muted">Grupo</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            className={`${inputClass} text-center`}
+            value={exercise.agrupador}
+            onChange={(e) => set("agrupador", e.target.value)}
+            placeholder="—"
+          />
+        </div>
+
         <div className="grid flex-1 grid-cols-2 gap-2">
           <div>
             <label className="mb-1 block text-xs text-muted">
@@ -105,6 +116,7 @@ export function ExerciseRowEditor({
             </select>
           </div>
         </div>
+
         <button
           type="button"
           onClick={onRemove}
@@ -114,6 +126,11 @@ export function ExerciseRowEditor({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      <p className="text-xs text-muted">
+        Ejercicios con el mismo número de grupo (dentro del mismo día) se muestran combinados
+        en una misma serie.
+      </p>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Campo label="Series" value={exercise.series} onChange={(v) => set("series", v)} />
@@ -132,11 +149,6 @@ export function ExerciseRowEditor({
 
       <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
       <Campo label="Link de video" value={exercise.video} onChange={(v) => set("video", v)} />
-
-      <div>
-        <label className="mb-1 block text-xs text-muted">Combinar con (color)</label>
-        <ColorPicker value={exercise.grupo} onChange={(v) => set("grupo", v)} />
-      </div>
     </div>
   );
 }

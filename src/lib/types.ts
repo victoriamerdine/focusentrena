@@ -7,6 +7,11 @@ export interface Exercise {
   pausas: string;
   notas: string;
   video: string;
+  // "agrupador": lo que escribe el entrenador (número/texto libre); "grupo":
+  // color calculado por el servidor a partir del agrupador (mismo
+  // agrupador dentro de un día = mismo color). La vista del alumno usa
+  // "grupo"; el panel del entrenador usa "agrupador".
+  agrupador: string;
   grupo: string;
 }
 

@@ -30,9 +30,12 @@
  *   GET {WEB_APP_URL}?id=<valor de la celda E2 del alumno>
  *   -> 200 { alumno, tipoPlan, dias: [{ nombre, ejercicios: [...] }] }
  *   -> 200 { error: "not_found" | "missing_id" }
- * Cada ejercicio incluye "grupo": el color de fondo de la fila (hex) si el
- * entrenador coloreó ese bloque para indicar ejercicios a combinar en la
- * misma serie, o "" si la fila no tiene color.
+ * Cada ejercicio incluye "agrupador" (columna I, un texto/número libre que
+ * pone el entrenador) y "grupo": un color (hex) calculado en el servidor
+ * a partir del agrupador — mismo agrupador dentro de un día = mismo
+ * color, "" si no tiene agrupador. El frontend de alumnos usa "grupo"
+ * para mostrar "combinar en la misma serie"; el panel del entrenador usa
+ * "agrupador" para el campo editable.
  *
  * Contrato del Web App (escritura, panel del entrenador): ver el comentario
  * arriba de la sección 3, más abajo en este archivo.
@@ -58,6 +61,13 @@
 
 var SPREADSHEET_ID = "10poNqi6ASxO6bP0bnjfIEgV3_eGR1qiZuubuHfd8eHk";
 var DAY_REGEX = /^d[ií]a\s*\d+/i;
+
+// Paleta de colores para agrupar ejercicios "a combinar en la misma serie".
+// Ya no se lee/escribe el color de fondo de la celda (era frágil: se
+// perdía fácil al crear/editar por API) — el color se calcula acá mismo,
+// en el servidor, a partir del número que el entrenador pone en la
+// columna "Agrupador". Mismo número dentro de un día = mismo color.
+var PALETA_GRUPOS = ["#bfbfbf", "#ffe599", "#b6d7a8", "#f4cccc", "#a4c2f4", "#ffc000"];
 
 // ============================================================
 // 1) AUTOMATIZACIÓN DEL SHEET (entrenador) — sin cambios
@@ -209,6 +219,50 @@ function aplicarValidacionColumnaA(ss, hoja) {
     .build();
 
   hoja.getRange("A8:A1000").setDataValidation(regla);
+}
+
+// Migración one-off: escribe el encabezado "Agrupador" en la columna I de
+// cada bloque de día (misma fila que "Patrón/Músculo"/"Ejercicio"), en
+// "Template Rutina" y en todas las hojas de alumnos existentes. No pisa
+// nada que ya esté escrito ahí. Correr una sola vez desde el editor
+// (▶ Run) después de pegar esta versión del código — no usa getUi(), así
+// que anda bien ejecutada directo desde el editor (Ver → Registros para
+// confirmar cuántas hojas tocó).
+function agregarEncabezadosAgrupador() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
+
+  let hojasActualizadas = 0;
+
+  ss.getSheets().forEach(hoja => {
+
+    if (excluir.includes(hoja.getName())) return;
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 1) return;
+
+    const valores = hoja.getRange(1, 1, lastRow, 2).getValues();
+    let tocada = false;
+
+    for (let r = 0; r < valores.length; r++) {
+      const colA = String(valores[r][0] || "").trim();
+      const colB = String(valores[r][1] || "").trim();
+      const esEtiquetaDia = DAY_REGEX.test(colA) || DAY_REGEX.test(colB);
+      if (!esEtiquetaDia) continue;
+
+      const filaEncabezado = r + 2; // la fila siguiente a la etiqueta del día
+      const celda = hoja.getRange(filaEncabezado, 9); // columna I
+      if (String(celda.getValue() || "").trim()) continue; // ya tiene algo, no se pisa
+
+      celda.setValue("Agrupador");
+      tocada = true;
+    }
+
+    if (tocada) hojasActualizadas++;
+  });
+
+  Logger.log(`Listo. Se agregó el encabezado "Agrupador" en ${hojasActualizadas} hoja(s).`);
 }
 
 function crearNuevaRutina() {
@@ -618,14 +672,14 @@ function construirRutina(hoja) {
     return { alumno: alumno, tipoPlan: tipoPlan, dias: [] };
   }
 
-  // Se leen los datos, fórmulas, texto enriquecido y colores en bloque
-  // (4 llamadas totales) en vez de una llamada por fila — con rutinas de
-  // 20-30 filas esto es la diferencia entre ~4 y ~100 llamadas a la API.
-  const rango = hoja.getRange(1, 1, lastRow, 8);
+  // Se leen los datos, fórmulas y texto enriquecido en bloque (3 llamadas
+  // totales) en vez de una llamada por fila — con rutinas de 20-30 filas
+  // esto es la diferencia entre ~3 y ~100 llamadas a la API. Columna I =
+  // Agrupador (ver PALETA_GRUPOS más arriba).
+  const rango = hoja.getRange(1, 1, lastRow, 9);
   const valores = rango.getValues();
   const formulas = rango.getFormulas();
   const richTexts = rango.getRichTextValues();
-  const coloresColA = hoja.getRange(1, 1, lastRow, 1).getBackgrounds();
 
   const dias = [];
   let diaActual = null;
@@ -648,8 +702,6 @@ function construirRutina(hoja) {
     if (esFilaEncabezado(colA, colB)) continue;
     if (esFilaVacia(fila)) continue;
 
-    const color = coloresColA[r][0];
-
     diaActual.ejercicios.push({
       patron: colA,
       ejercicio: colB,
@@ -659,11 +711,34 @@ function construirRutina(hoja) {
       pausas: formatearValor(fila[5]),
       notas: String(fila[6] || "").trim(),
       video: extraerLinkVideoDeCelda(fila[7], formulas[r][7], richTexts[r][7]),
-      grupo: (!color || color.toLowerCase() === "#ffffff") ? "" : color,
+      agrupador: formatearValor(fila[8]),
+      grupo: "", // lo completa coloreaGruposPorDia() más abajo
     });
   }
 
+  colorearGruposPorDia(dias);
+
   return { alumno: alumno, tipoPlan: tipoPlan, dias: dias };
+}
+
+// Dentro de cada día, a cada valor distinto de "agrupador" (en el orden
+// en que aparece) se le asigna un color de PALETA_GRUPOS. Vacío = sin
+// grupo. Como es puramente a partir del valor de la celda (no del
+// formato), nunca puede quedar "sin pintar".
+function colorearGruposPorDia(dias) {
+  dias.forEach(dia => {
+    const colorPorAgrupador = {};
+    let siguienteColor = 0;
+    dia.ejercicios.forEach(ex => {
+      const clave = ex.agrupador;
+      if (!clave) return;
+      if (!(clave in colorPorAgrupador)) {
+        colorPorAgrupador[clave] = PALETA_GRUPOS[siguienteColor % PALETA_GRUPOS.length];
+        siguienteColor++;
+      }
+      ex.grupo = colorPorAgrupador[clave];
+    });
+  });
 }
 
 function esFilaEncabezado(colA, colB) {
@@ -1054,11 +1129,14 @@ function manejarGuardarDia(ss, datos) {
 
   if (totalFilas > 0) {
 
-    const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 8);
+    // 9 columnas: A-H igual que antes + I (Agrupador). Ya no se toca el
+    // color de fondo de la fila — el agrupamiento se calcula del lado del
+    // servidor a partir del valor de "Agrupador" (ver colorearGruposPorDia),
+    // así que no hay nada de formato que preservar ni que se pueda perder.
+    const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 9);
     rango.clearContent();
     rango.clearDataValidations(); // si no, Sheets rechaza el valor nuevo por la
                                    // validación vieja que dejó filterPatterns
-    rango.setBackground("#ffffff");
 
     if (ejercicios.length > 0) {
 
@@ -1071,16 +1149,10 @@ function manejarGuardarDia(ss, datos) {
         String(ex.pausas || ""),
         String(ex.notas || ""),
         String(ex.video || ""),
+        String(ex.agrupador || ""),
       ]);
 
-      const rangoDatos = hoja.getRange(bloque.filaDatosInicio, 1, ejercicios.length, 8);
-      rangoDatos.setValues(filas);
-
-      const fondos = ejercicios.map(ex => {
-        const color = (ex.grupo && /^#[0-9a-f]{6}$/i.test(ex.grupo)) ? ex.grupo : "#ffffff";
-        return [color, color, color, color, color, color, color, color];
-      });
-      rangoDatos.setBackgrounds(fondos);
+      hoja.getRange(bloque.filaDatosInicio, 1, ejercicios.length, 9).setValues(filas);
     }
   }
 

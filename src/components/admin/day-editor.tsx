@@ -16,6 +16,7 @@ const EJERCICIO_VACIO: Exercise = {
   pausas: "",
   notas: "",
   video: "",
+  agrupador: "",
   grupo: "",
 };
 

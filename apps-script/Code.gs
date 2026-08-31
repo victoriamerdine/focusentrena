@@ -265,6 +265,52 @@ function agregarEncabezadosAgrupador() {
   Logger.log(`Listo. Se agregó el encabezado "Agrupador" en ${hojasActualizadas} hoja(s).`);
 }
 
+// Configura el formato condicional de "Template Rutina" y de todas las
+// hojas de alumnos existentes: pinta cada fila según el número que tenga
+// en la columna Agrupador (I), con los mismos colores exactos que usa la
+// app (PALETA_GRUPOS / colorParaAgrupador), así el Sheet se ve igual que
+// la web. Al estar en "Template Rutina", cualquier alumno nuevo lo hereda
+// solo (copyTo() copia el formato condicional). Correr una sola vez desde
+// el editor (▶ Run) — es seguro correrla de nuevo, no duplica reglas.
+function aplicarFormatoCondicionalAgrupador() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
+  const RANGO_A1 = "A8:I1000";
+
+  let hojasActualizadas = 0;
+
+  ss.getSheets().forEach(hoja => {
+
+    if (excluir.includes(hoja.getName())) return;
+
+    const rango = hoja.getRange(RANGO_A1);
+
+    // saca las reglas que hayamos puesto nosotros antes en este mismo
+    // rango exacto (para poder correr esta función de nuevo sin duplicar),
+    // dejando intacta cualquier otra regla de formato condicional que ya
+    // exista en la hoja por otro motivo.
+    const reglasPrevias = hoja.getConditionalFormatRules().filter(regla => {
+      const rangos = regla.getRanges();
+      return !(rangos.length === 1 && rangos[0].getA1Notation() === RANGO_A1);
+    });
+
+    const reglasNuevas = PALETA_GRUPOS.map((color, i) => {
+      const valor = i + 1;
+      return SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied(`=$I8=${valor}`)
+        .setBackground(color)
+        .setRanges([rango])
+        .build();
+    });
+
+    hoja.setConditionalFormatRules(reglasPrevias.concat(reglasNuevas));
+    hojasActualizadas++;
+  });
+
+  Logger.log(`Listo. Formato condicional de Agrupador configurado en ${hojasActualizadas} hoja(s).`);
+}
+
 function crearNuevaRutina() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -727,18 +773,36 @@ function construirRutina(hoja) {
 // formato), nunca puede quedar "sin pintar".
 function colorearGruposPorDia(dias) {
   dias.forEach(dia => {
-    const colorPorAgrupador = {};
-    let siguienteColor = 0;
     dia.ejercicios.forEach(ex => {
-      const clave = ex.agrupador;
-      if (!clave) return;
-      if (!(clave in colorPorAgrupador)) {
-        colorPorAgrupador[clave] = PALETA_GRUPOS[siguienteColor % PALETA_GRUPOS.length];
-        siguienteColor++;
-      }
-      ex.grupo = colorPorAgrupador[clave];
+      ex.grupo = colorParaAgrupador(ex.agrupador);
     });
   });
+}
+
+// El número de agrupador mapea siempre al mismo color de PALETA_GRUPOS
+// (1 -> primer color, 2 -> segundo, etc., y vuelve a empezar si hay más
+// grupos que colores). Así el color que ve el alumno en la web es
+// exactamente el mismo que pinta la regla de formato condicional del
+// Sheet (ver aplicarFormatoCondicionalAgrupador) — no depende de en qué
+// orden aparecen los números dentro del día.
+function colorParaAgrupador(agrupador) {
+
+  const valor = String(agrupador || "").trim();
+  if (!valor) return "";
+
+  const numero = parseInt(valor, 10);
+  if (!isNaN(numero) && numero > 0) {
+    return PALETA_GRUPOS[(numero - 1) % PALETA_GRUPOS.length];
+  }
+
+  // Si alguien pone texto en vez de un número, igual le asigna un color
+  // estable (siempre el mismo para el mismo texto) en vez de dejarlo sin
+  // pintar.
+  let hash = 0;
+  for (let i = 0; i < valor.length; i++) {
+    hash = (hash * 31 + valor.charCodeAt(i)) % PALETA_GRUPOS.length;
+  }
+  return PALETA_GRUPOS[hash];
 }
 
 function esFilaEncabezado(colA, colB) {

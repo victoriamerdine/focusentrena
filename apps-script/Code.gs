@@ -4,30 +4,38 @@
  * Este archivo va pegado en el editor de Apps Script del Google Sheet
  * (Extensiones > Apps Script), reemplazando Code.gs por completo.
  *
- * Contiene dos partes:
+ * Contiene tres partes:
  *  1) Automatización del lado del entrenador (ya existente):
  *     - filterPatterns(e): trigger onEdit que arma los desplegables de
  *       Patrón/Músculo (col. A) y Ejercicio (col. B), y auto-completa el
  *       link de video (col. H) buscando en "EjerciciosConsolidado".
- *     - configurarColumnaA(): arma la lista de valores permitidos en A8:A1000.
- *     - crearNuevaRutina(): duplica "Template Rutina", pide el nombre del
- *       alumno, lo pone en B2, genera un id único (slug) en E2 y nombra la
- *       pestaña "<nombre> - Rutina".
+ *     - configurarColumnaA() / aplicarValidacionColumnaA(): arman la lista
+ *       de valores permitidos en A8:A1000.
+ *     - crearNuevaRutina() / crearHojaRutina(): duplica "Template Rutina",
+ *       pide el nombre del alumno, lo pone en B2, genera un id único
+ *       (slug) en E2 y nombra la pestaña "<nombre> - Rutina".
  *     - actualizarDashboard() / actualizarDashboardUnicavez(): arman la hoja
  *       "Dashboard" con el listado de alumnos, accesos directos y un
  *       checkbox por fila para marcar qué rutina borrar.
  *     - eliminarRutinasMarcadas(): borra las hojas tildadas en el Dashboard
  *       (pide confirmación antes de borrar).
- *  2) API para el frontend (Next.js):
+ *  2) API pública de lectura para el frontend de alumnos (Next.js):
  *     - doGet(e): Web App que devuelve la rutina de un alumno en JSON.
+ *  3) API de administración para el panel del entrenador (protegida por
+ *     contraseña, ver sección al final del archivo):
+ *     - doPost(e): crear/editar/borrar alumnos y guardar los ejercicios
+ *       de un día.
  *
- * Contrato del Web App:
+ * Contrato del Web App (lectura, pública):
  *   GET {WEB_APP_URL}?id=<valor de la celda E2 del alumno>
  *   -> 200 { alumno, tipoPlan, dias: [{ nombre, ejercicios: [...] }] }
  *   -> 200 { error: "not_found" | "missing_id" }
  * Cada ejercicio incluye "grupo": el color de fondo de la fila (hex) si el
  * entrenador coloreó ese bloque para indicar ejercicios a combinar en la
  * misma serie, o "" si la fila no tiene color.
+ *
+ * Contrato del Web App (escritura, panel del entrenador): ver el comentario
+ * arriba de la sección 3, más abajo en este archivo.
  *
  * Rendimiento: construirRutina() lee valores/fórmulas/rich text/colores en
  * bloque (unas pocas llamadas totales) en vez de una por fila, y
@@ -151,13 +159,16 @@ function filterPatterns(e) {
 }
 
 function configurarColumnaA() {
-
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const hoja = ss.getActiveSheet();
+  aplicarValidacionColumnaA(ss, ss.getActiveSheet());
+}
+
+// Misma lógica que antes, pero recibe la hoja como parámetro para poder
+// llamarse también desde la API del entrenador (ahí no hay "hoja activa").
+function aplicarValidacionColumnaA(ss, hoja) {
+
   const base = ss.getSheetByName("EjerciciosConsolidado");
-
   const tipoPlan = hoja.getRange("B4").getValue();
-
   const datos = base.getDataRange().getValues();
 
   let lista = [];
@@ -195,64 +206,67 @@ function configurarColumnaA() {
 function crearNuevaRutina() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+
+  const respuesta = ui.prompt(
+    "Nueva Rutina",
+    "Ingrese el nombre del alumno:",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (respuesta.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const nombreAlumno = respuesta.getResponseText().trim();
+
+  if (!nombreAlumno) {
+    ui.alert("Debe ingresar un nombre.");
+    return;
+  }
+
+  try {
+    const resultado = crearHojaRutina(ss, nombreAlumno, null);
+    ss.setActiveSheet(resultado.hoja);
+  } catch (err) {
+    ui.alert(err.message);
+  }
+}
+
+// Núcleo compartido por crearNuevaRutina() (desde el menú de Sheets) y por
+// la API del entrenador. tipoPlan es opcional: si no se pasa, se deja el
+// que ya trae "Template Rutina" por defecto.
+function crearHojaRutina(ss, nombreAlumno, tipoPlan) {
 
   const template = ss.getSheetByName("Template Rutina");
 
   if (!template) {
-    SpreadsheetApp.getUi().alert(
-      'No existe la hoja "Template Rutina"'
-    );
-    return;
+    throw new Error('No existe la hoja "Template Rutina"');
   }
 
-  const respuesta = SpreadsheetApp.getUi().prompt(
-    "Nueva Rutina",
-    "Ingrese el nombre del alumno:",
-    SpreadsheetApp.getUi().ButtonSet.OK_CANCEL
-  );
-
-  if (
-    respuesta.getSelectedButton() !==
-    SpreadsheetApp.getUi().Button.OK
-  ) {
-    return;
-  }
-
-  const nombreAlumno =
-    respuesta.getResponseText().trim();
-
-  if (!nombreAlumno) {
-    SpreadsheetApp.getUi().alert(
-      "Debe ingresar un nombre."
-    );
-    return;
-  }
-
-  const nombreHoja =
-    `${nombreAlumno} - Rutina`;
+  const nombreHoja = `${nombreAlumno} - Rutina`;
 
   if (ss.getSheetByName(nombreHoja)) {
-    SpreadsheetApp.getUi().alert(
-      "Esa rutina ya existe."
-    );
-    return;
+    throw new Error("Esa rutina ya existe.");
   }
 
   const nuevaHoja = template.copyTo(ss);
 
   nuevaHoja.setName(nombreHoja);
 
-  nuevaHoja.getRange("B2")
-    .setValue(nombreAlumno);
+  nuevaHoja.getRange("B2").setValue(nombreAlumno);
 
-  nuevaHoja.getRange("E2")
-    .setValue(generarIdUnico(ss, nombreAlumno));
+  if (tipoPlan) {
+    nuevaHoja.getRange("B4").setValue(tipoPlan);
+  }
 
-  ss.setActiveSheet(nuevaHoja);
+  const id = generarIdUnico(ss, nombreAlumno);
+  nuevaHoja.getRange("E2").setValue(id);
 
   invalidarIndiceAlumnos();
   actualizarDashboard();
 
+  return { hoja: nuevaHoja, id: id, nombreHoja: nombreHoja };
 }
 
 function generarIdUnico(ss, nombre) {
@@ -658,4 +672,349 @@ function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// 3) API DE ADMINISTRACIÓN (panel del entrenador, requiere contraseña)
+// ============================================================
+//
+// Contrato: POST {WEB_APP_URL} con body JSON (mandado con
+// Content-Type: text/plain para evitar el preflight CORS que Apps Script
+// no puede responder):
+//   { "password": "...", "accion": "<nombre>", ...campos según la acción }
+//
+// Acciones disponibles:
+//   listar_alumnos       -> { ok, alumnos: [{ id, alumno, tipoPlan, hoja }] }
+//   obtener_catalogo     -> { ok, catalogo: { patrones, musculos,
+//                              ejerciciosPorPatron, ejerciciosPorMusculo,
+//                              videosPorEjercicio } }
+//   crear_alumno         { nombreAlumno, tipoPlan } -> { ok, alumno }
+//   actualizar_alumno    { id, nombreAlumno?, tipoPlan? } -> { ok }
+//   eliminar_alumno      { id } -> { ok }
+//   guardar_dia          { id, diaNombre, ejercicios: [...] } -> { ok }
+//
+// Cualquier error (password incorrecta, datos faltantes, etc.) responde
+// { error: "..." } manteniendo status 200 (así es como funciona
+// ContentService — el frontend debe mirar el campo "error"/"ok").
+//
+// guardar_dia NO inserta ni borra filas de la hoja (para no correr el
+// riesgo de romper fórmulas del lado derecho de la planilla): reescribe
+// los ejercicios dentro del rango de filas que ya existe entre la
+// etiqueta de ese día y la del día siguiente. Si es el último día de la
+// hoja, sí puede crecer más allá de esas filas. Si un día del medio no
+// tiene lugar suficiente, devuelve un error pidiendo agregar filas a mano.
+
+function configurarPasswordEntrenador() {
+
+  const ui = SpreadsheetApp.getUi();
+
+  const respuesta = ui.prompt(
+    "Contraseña del panel de entrenador",
+    "Ingresá la contraseña que vas a usar para entrar a focus-entrena.web.app/entrenador:",
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (respuesta.getSelectedButton() !== ui.Button.OK) return;
+
+  const password = respuesta.getResponseText().trim();
+
+  if (!password) {
+    ui.alert("Debe ingresar una contraseña.");
+    return;
+  }
+
+  PropertiesService.getScriptProperties().setProperty("TRAINER_PASSWORD", password);
+  ui.alert("Listo, contraseña guardada.");
+}
+
+function verificarPassword(password) {
+  const guardada = PropertiesService.getScriptProperties().getProperty("TRAINER_PASSWORD");
+  return !!guardada && String(password || "") === guardada;
+}
+
+function doPost(e) {
+
+  let datos;
+
+  try {
+    datos = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonResponse({ error: "bad_request" });
+  }
+
+  if (!verificarPassword(datos.password)) {
+    return jsonResponse({ error: "unauthorized" });
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  try {
+
+    switch (datos.accion) {
+
+      case "listar_alumnos":
+        return jsonResponse({ ok: true, alumnos: manejarListarAlumnos(ss) });
+
+      case "obtener_catalogo":
+        return jsonResponse({ ok: true, catalogo: manejarObtenerCatalogo(ss) });
+
+      case "crear_alumno":
+        return jsonResponse({ ok: true, alumno: manejarCrearAlumno(ss, datos) });
+
+      case "actualizar_alumno":
+        manejarActualizarAlumno(ss, datos);
+        return jsonResponse({ ok: true });
+
+      case "eliminar_alumno":
+        manejarEliminarAlumno(ss, datos);
+        return jsonResponse({ ok: true });
+
+      case "guardar_dia":
+        manejarGuardarDia(ss, datos);
+        return jsonResponse({ ok: true });
+
+      default:
+        return jsonResponse({ error: "accion_desconocida" });
+    }
+
+  } catch (err) {
+    return jsonResponse({ error: "server_error", detalle: err.message });
+  }
+}
+
+function manejarListarAlumnos(ss) {
+
+  const excluir = [
+    "Dashboard",
+    "EjerciciosConsolidado",
+    "Datos",
+    "Volumen Meso",
+    "Template Rutina"
+  ];
+
+  return ss.getSheets()
+    .filter(h => !excluir.includes(h.getName()))
+    .map(h => ({
+      id: String(h.getRange("E2").getValue() || "").trim(),
+      alumno: String(h.getRange("B2").getValue() || "").trim() || h.getName(),
+      tipoPlan: String(h.getRange("B4").getValue() || "").trim(),
+      hoja: h.getName(),
+    }))
+    .filter(a => a.id)
+    .sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
+}
+
+function manejarObtenerCatalogo(ss) {
+
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+
+  if (!base) {
+    return { patrones: [], musculos: [], ejerciciosPorPatron: {}, ejerciciosPorMusculo: {}, videosPorEjercicio: {} };
+  }
+
+  const datos = base.getDataRange().getValues();
+  // columnas: 0=#, 1=Categoría, 2=Músculo, 3=Ejercicio, 4=Link1
+
+  const patrones = new Set();
+  const musculos = new Set();
+  const ejerciciosPorPatron = {};
+  const ejerciciosPorMusculo = {};
+  const videosPorEjercicio = {};
+
+  datos.forEach(fila => {
+
+    const categoria = String(fila[1] || "").trim();
+    const musculo = String(fila[2] || "").trim();
+    const ejercicio = String(fila[3] || "").trim();
+    const link = String(fila[4] || "").trim();
+
+    if (!ejercicio) return;
+
+    if (categoria) {
+      patrones.add(categoria);
+      if (!ejerciciosPorPatron[categoria]) ejerciciosPorPatron[categoria] = [];
+      if (ejerciciosPorPatron[categoria].indexOf(ejercicio) === -1) {
+        ejerciciosPorPatron[categoria].push(ejercicio);
+      }
+    }
+
+    if (musculo) {
+      musculos.add(musculo);
+      if (!ejerciciosPorMusculo[musculo]) ejerciciosPorMusculo[musculo] = [];
+      if (ejerciciosPorMusculo[musculo].indexOf(ejercicio) === -1) {
+        ejerciciosPorMusculo[musculo].push(ejercicio);
+      }
+    }
+
+    if (link && !videosPorEjercicio[ejercicio]) {
+      videosPorEjercicio[ejercicio] = link;
+    }
+  });
+
+  const ordenar = arr => arr.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+
+  Object.keys(ejerciciosPorPatron).forEach(k => ordenar(ejerciciosPorPatron[k]));
+  Object.keys(ejerciciosPorMusculo).forEach(k => ordenar(ejerciciosPorMusculo[k]));
+
+  return {
+    patrones: ordenar([...patrones]),
+    musculos: ordenar([...musculos]),
+    ejerciciosPorPatron: ejerciciosPorPatron,
+    ejerciciosPorMusculo: ejerciciosPorMusculo,
+    videosPorEjercicio: videosPorEjercicio,
+  };
+}
+
+function manejarCrearAlumno(ss, datos) {
+
+  const nombreAlumno = String(datos.nombreAlumno || "").trim();
+  const tipoPlan = String(datos.tipoPlan || "").trim();
+
+  if (!nombreAlumno) throw new Error("Falta el nombre del alumno.");
+
+  if (tipoPlan !== "Musculo" && tipoPlan !== "Patrones") {
+    throw new Error('El tipo de plan debe ser "Musculo" o "Patrones".');
+  }
+
+  const resultado = crearHojaRutina(ss, nombreAlumno, tipoPlan);
+
+  return { id: resultado.id, alumno: nombreAlumno, tipoPlan: tipoPlan, hoja: resultado.nombreHoja };
+}
+
+function manejarActualizarAlumno(ss, datos) {
+
+  const id = String(datos.id || "").trim();
+  if (!id) throw new Error("Falta el id.");
+
+  const hoja = buscarAlumno(id, ss);
+  if (!hoja) throw new Error("No se encontró esa rutina.");
+
+  if (typeof datos.nombreAlumno === "string" && datos.nombreAlumno.trim()) {
+    hoja.getRange("B2").setValue(datos.nombreAlumno.trim());
+  }
+
+  if (datos.tipoPlan === "Musculo" || datos.tipoPlan === "Patrones") {
+    hoja.getRange("B4").setValue(datos.tipoPlan);
+  }
+
+  invalidarIndiceAlumnos();
+  invalidarRutinaCache(id);
+  actualizarDashboard();
+}
+
+function manejarEliminarAlumno(ss, datos) {
+
+  const id = String(datos.id || "").trim();
+  if (!id) throw new Error("Falta el id.");
+
+  const hoja = buscarAlumno(id, ss);
+  if (!hoja) throw new Error("No se encontró esa rutina.");
+
+  ss.deleteSheet(hoja);
+
+  invalidarIndiceAlumnos();
+  invalidarRutinaCache(id);
+  actualizarDashboard();
+}
+
+function manejarGuardarDia(ss, datos) {
+
+  const id = String(datos.id || "").trim();
+  const diaNombre = String(datos.diaNombre || "").trim();
+  const ejercicios = Array.isArray(datos.ejercicios) ? datos.ejercicios : null;
+
+  if (!id) throw new Error("Falta el id.");
+  if (!diaNombre) throw new Error("Falta el día.");
+  if (!ejercicios) throw new Error("Falta la lista de ejercicios.");
+
+  const hoja = buscarAlumno(id, ss);
+  if (!hoja) throw new Error("No se encontró esa rutina.");
+
+  const bloque = ubicarBloqueDia(hoja, diaNombre);
+  if (!bloque) throw new Error(`No se encontró el día "${diaNombre}" en esta rutina.`);
+
+  const capacidad = bloque.filaFin - bloque.filaDatosInicio + 1;
+
+  if (!bloque.esUltimoBloque && ejercicios.length > capacidad) {
+    throw new Error(
+      `Ese día tiene lugar para ${capacidad} ejercicios como máximo ahora mismo. ` +
+      `Agregá filas manualmente en la hoja entre este día y el siguiente, o sacá algún ejercicio.`
+    );
+  }
+
+  const filaFinReal = bloque.esUltimoBloque
+    ? Math.max(bloque.filaFin, bloque.filaDatosInicio + ejercicios.length - 1)
+    : bloque.filaFin;
+
+  const totalFilas = filaFinReal - bloque.filaDatosInicio + 1;
+
+  if (totalFilas > 0) {
+
+    const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 8);
+    rango.clearContent();
+    rango.setBackground("#ffffff");
+
+    if (ejercicios.length > 0) {
+
+      const filas = ejercicios.map(ex => [
+        String(ex.patron || ""),
+        String(ex.ejercicio || ""),
+        String(ex.series || ""),
+        String(ex.repeticiones || ""),
+        String(ex.intensidad || ""),
+        String(ex.pausas || ""),
+        String(ex.notas || ""),
+        String(ex.video || ""),
+      ]);
+
+      const rangoDatos = hoja.getRange(bloque.filaDatosInicio, 1, ejercicios.length, 8);
+      rangoDatos.setValues(filas);
+
+      const fondos = ejercicios.map(ex => {
+        const color = (ex.grupo && /^#[0-9a-f]{6}$/i.test(ex.grupo)) ? ex.grupo : "#ffffff";
+        return [color, color, color, color, color, color, color, color];
+      });
+      rangoDatos.setBackgrounds(fondos);
+    }
+  }
+
+  invalidarRutinaCache(id);
+  aplicarValidacionColumnaA(ss, hoja);
+}
+
+// Ubica, sin modificar nada, el rango de filas de datos de un día: desde
+// la fila siguiente a su encabezado hasta la fila anterior a la etiqueta
+// del día siguiente (o "esUltimoBloque: true" si no hay uno después).
+function ubicarBloqueDia(hoja, diaNombre) {
+
+  const lastRow = Math.max(hoja.getLastRow(), 1);
+  const valores = hoja.getRange(1, 1, lastRow, 2).getValues();
+
+  const bloques = [];
+
+  for (let r = 0; r < valores.length; r++) {
+    const colA = String(valores[r][0] || "").trim();
+    const colB = String(valores[r][1] || "").trim();
+    const etiqueta = DAY_REGEX.test(colA) ? colA : (DAY_REGEX.test(colB) ? colB : null);
+    if (etiqueta) bloques.push({ nombre: etiqueta, filaEtiqueta: r + 1 });
+  }
+
+  const idx = bloques.findIndex(b => b.nombre === diaNombre);
+  if (idx === -1) return null;
+
+  const esUltimoBloque = idx === bloques.length - 1;
+  const filaDatosInicio = bloques[idx].filaEtiqueta + 2;
+  const filaFin = esUltimoBloque
+    ? Math.max(lastRow, filaDatosInicio - 1)
+    : bloques[idx + 1].filaEtiqueta - 1;
+
+  return {
+    filaDatosInicio: filaDatosInicio,
+    filaFin: Math.max(filaFin, filaDatosInicio - 1),
+    esUltimoBloque: esUltimoBloque,
+  };
+}
+
+function invalidarRutinaCache(id) {
+  CacheService.getScriptCache().remove("rutina_" + id);
 }

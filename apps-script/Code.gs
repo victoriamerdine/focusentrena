@@ -952,6 +952,8 @@ function manejarGuardarDia(ss, datos) {
 
     const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 8);
     rango.clearContent();
+    rango.clearDataValidations(); // si no, Sheets rechaza el valor nuevo por la
+                                   // validación vieja que dejó filterPatterns
     rango.setBackground("#ffffff");
 
     if (ejercicios.length > 0) {

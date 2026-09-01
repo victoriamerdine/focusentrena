@@ -72,6 +72,17 @@ export function obtenerCatalogo(password: string) {
   return postAdmin<{ ok: true; catalogo: Catalogo }>(password, "obtener_catalogo");
 }
 
+// Junta listar_alumnos + obtener_catalogo en un solo pedido: se usan
+// siempre juntos al entrar al panel, y cada request a Apps Script tiene un
+// costo fijo de arranque bastante alto, así que un solo viaje de ida y
+// vuelta en vez de dos en paralelo achica bastante la carga inicial.
+export function cargarPanel(password: string) {
+  return postAdmin<{ ok: true; alumnos: AlumnoResumen[]; catalogo: Catalogo }>(
+    password,
+    "cargar_panel"
+  );
+}
+
 export function crearAlumno(password: string, nombreAlumno: string, tipoPlan: string) {
   return postAdmin<{ ok: true; alumno: AlumnoResumen }>(password, "crear_alumno", {
     nombreAlumno,

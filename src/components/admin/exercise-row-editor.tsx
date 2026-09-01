@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 
+import { SearchableSelect } from "@/components/admin/searchable-select";
 import type { Catalogo } from "@/lib/admin-types";
 import type { Exercise } from "@/lib/types";
 
@@ -99,22 +100,14 @@ export function ExerciseRowEditor({
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted">Ejercicio</label>
-            <select
-              className={inputClass}
-              value={exercise.ejercicio}
-              onChange={(e) => onEjercicioChange(e.target.value)}
-              disabled={!exercise.patron}
-            >
-              <option value="">—</option>
-              {opcionesEjercicio.map((ej) => (
-                <option key={ej} value={ej}>
-                  {ej}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SearchableSelect
+            label="Ejercicio"
+            value={exercise.ejercicio}
+            options={opcionesEjercicio}
+            onChange={onEjercicioChange}
+            disabled={!exercise.patron}
+            placeholder={exercise.patron ? "Buscar..." : "Elegí primero"}
+          />
         </div>
 
         <button

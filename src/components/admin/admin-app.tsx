@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { AlumnoDashboard } from "@/components/admin/alumno-dashboard";
 import { LoginScreen } from "@/components/admin/login-screen";
 import { RoutineEditor } from "@/components/admin/routine-editor";
-import { AdminApiError, listarAlumnos, obtenerCatalogo } from "@/lib/admin-api";
+import { AdminApiError, cargarPanel } from "@/lib/admin-api";
 import { clearStoredPassword, getStoredPassword, setStoredPassword } from "@/lib/admin-auth";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
 
@@ -42,10 +42,7 @@ export function AdminApp() {
 
   async function cargarSesion(password: string) {
     try {
-      const [{ alumnos }, { catalogo }] = await Promise.all([
-        listarAlumnos(password),
-        obtenerCatalogo(password),
-      ]);
+      const { alumnos, catalogo } = await cargarPanel(password);
       setStoredPassword(password);
       setEstado({ vista: "dashboard", password, alumnos: ordenarAlumnos(alumnos), catalogo });
     } catch (err) {

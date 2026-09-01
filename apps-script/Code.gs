@@ -760,19 +760,27 @@ function limpiarCacheEntrenador() {
   cache.remove("catalogo_v1");
 }
 
-// "yyyy-MM-dd" (o "" si la celda está vacía o no es una fecha), usando el
-// huso horario del script para no correr el día por conversión a UTC.
-function leerFechaCreacion(hoja) {
-  const valor = hoja.getRange("E4").getValue();
-  if (!(valor instanceof Date)) return "";
-  return Utilities.formatDate(valor, Session.getScriptTimeZone(), "yyyy-MM-dd");
+// B2, E2, B4 y E4 en una sola lectura (antes eran hasta 4 llamadas
+// separadas a la API de Sheets) — lo comparten construirRutina() y
+// manejarListarAlumnos().
+function leerEncabezadoHoja(hoja) {
+  const bloque = hoja.getRange(2, 1, 3, 5).getValues();
+  const alumno = String(bloque[0][1] || "").trim(); // B2
+  const id = String(bloque[0][4] || "").trim(); // E2
+  const tipoPlan = String(bloque[2][1] || "").trim(); // B4
+  const fechaValor = bloque[2][4]; // E4
+  const fechaCreacion = fechaValor instanceof Date
+    ? Utilities.formatDate(fechaValor, Session.getScriptTimeZone(), "yyyy-MM-dd")
+    : "";
+  return { alumno: alumno, id: id, tipoPlan: tipoPlan, fechaCreacion: fechaCreacion };
 }
 
 function construirRutina(hoja) {
 
-  const alumno = String(hoja.getRange("B2").getValue() || "").trim();
-  const tipoPlan = String(hoja.getRange("B4").getValue() || "").trim();
-  const fechaCreacion = leerFechaCreacion(hoja);
+  const encabezado = leerEncabezadoHoja(hoja);
+  const alumno = encabezado.alumno;
+  const tipoPlan = encabezado.tipoPlan;
+  const fechaCreacion = encabezado.fechaCreacion;
 
   const lastRow = hoja.getLastRow();
   if (lastRow < 1) {
@@ -1060,6 +1068,18 @@ function doPost(e) {
       case "obtener_catalogo":
         return jsonResponse({ ok: true, catalogo: manejarObtenerCatalogo(ss) });
 
+      // Junta listar_alumnos + obtener_catalogo en un solo viaje de ida y
+      // vuelta: el panel del entrenador siempre pide los dos juntos al
+      // entrar, y cada request a Apps Script tiene un costo fijo de
+      // arranque bastante alto — pedir uno solo en vez de dos en paralelo
+      // es la mejora más grande para la carga inicial del panel.
+      case "cargar_panel":
+        return jsonResponse({
+          ok: true,
+          alumnos: manejarListarAlumnos(ss),
+          catalogo: manejarObtenerCatalogo(ss),
+        });
+
       case "crear_alumno":
         return jsonResponse({ ok: true, alumno: manejarCrearAlumno(ss, datos) });
 
@@ -1110,28 +1130,17 @@ function manejarListarAlumnos(ss) {
     "Template Rutina"
   ];
 
-  const zonaHoraria = Session.getScriptTimeZone();
-
   const resultado = ss.getSheets()
     .filter(h => !excluir.includes(h.getName()))
     .map(h => {
-      // B2, B4, E2 y E4 en una sola lectura por hoja (antes eran 3
-      // llamadas separadas) — con muchos alumnos esto era lo que más
-      // pesaba al entrar al panel.
-      const bloque = h.getRange(2, 1, 3, 5).getValues();
-      const alumno = String(bloque[0][1] || "").trim(); // B2
-      const tipoPlan = String(bloque[2][1] || "").trim(); // B4
-      const id = String(bloque[0][4] || "").trim(); // E2
-      const fechaCreacionValor = bloque[2][4]; // E4
-      const fechaCreacion = fechaCreacionValor instanceof Date
-        ? Utilities.formatDate(fechaCreacionValor, zonaHoraria, "yyyy-MM-dd")
-        : "";
+      // Una sola lectura por hoja (mismo helper que usa construirRutina).
+      const encabezado = leerEncabezadoHoja(h);
       return {
-        id: id,
-        alumno: alumno || h.getName(),
-        tipoPlan: tipoPlan,
+        id: encabezado.id,
+        alumno: encabezado.alumno || h.getName(),
+        tipoPlan: encabezado.tipoPlan,
         hoja: h.getName(),
-        fechaCreacion: fechaCreacion,
+        fechaCreacion: encabezado.fechaCreacion,
       };
     })
     .filter(a => a.id)

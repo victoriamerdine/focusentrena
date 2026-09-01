@@ -131,6 +131,15 @@ export function AdminApp() {
               ),
             });
           }}
+          onAlumnoEliminado={(id) => {
+            const s = estado;
+            setEstado({
+              vista: "dashboard",
+              password: s.password,
+              alumnos: s.alumnos.filter((a) => a.id !== id),
+              catalogo: s.catalogo,
+            });
+          }}
         />
       )}
     </main>

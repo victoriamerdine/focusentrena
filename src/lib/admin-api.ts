@@ -82,7 +82,7 @@ export function crearAlumno(password: string, nombreAlumno: string, tipoPlan: st
 export function actualizarAlumno(
   password: string,
   id: string,
-  cambios: { nombreAlumno?: string; tipoPlan?: string }
+  cambios: { nombreAlumno?: string; tipoPlan?: string; fechaCreacion?: string }
 ) {
   return postAdmin<{ ok: true }>(password, "actualizar_alumno", { id, ...cambios });
 }

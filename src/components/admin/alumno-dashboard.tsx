@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { crearAlumno, eliminarAlumno } from "@/lib/admin-api";
+import { formatearFecha } from "@/lib/format-fecha";
 import type { AlumnoResumen } from "@/lib/admin-types";
 
 export function AlumnoDashboard({
@@ -99,6 +100,7 @@ export function AlumnoDashboard({
                 <p className="truncate font-semibold text-foreground">{a.alumno}</p>
                 <p className="truncate text-xs text-muted">
                   {a.tipoPlan || "—"} · /r/{a.id}
+                  {a.fechaCreacion ? ` · Creado ${formatearFecha(a.fechaCreacion)}` : ""}
                 </p>
               </button>
               <button

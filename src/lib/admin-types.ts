@@ -3,6 +3,8 @@ export interface AlumnoResumen {
   alumno: string;
   tipoPlan: string;
   hoja: string;
+  // "yyyy-MM-dd" o "" si todavía no se cargó.
+  fechaCreacion: string;
 }
 
 export interface Catalogo {

@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DayEditor } from "@/components/admin/day-editor";
 import { WeekSummary } from "@/components/admin/week-summary";
-import { actualizarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
+import { actualizarAlumno, eliminarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
 import type { Exercise, Routine } from "@/lib/types";
@@ -16,12 +16,14 @@ export function RoutineEditor({
   catalogo,
   onVolver,
   onAlumnoActualizado,
+  onAlumnoEliminado,
 }: {
   password: string;
   alumno: AlumnoResumen;
   catalogo: Catalogo;
   onVolver: () => void;
   onAlumnoActualizado: (alumno: AlumnoResumen) => void;
+  onAlumnoEliminado: (id: string) => void;
 }) {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [error, setError] = useState("");
@@ -29,14 +31,19 @@ export function RoutineEditor({
 
   const [nombre, setNombre] = useState(alumno.alumno);
   const [tipoPlan, setTipoPlan] = useState(alumno.tipoPlan || "Musculo");
+  const [fechaCreacion, setFechaCreacion] = useState(alumno.fechaCreacion || "");
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [mensajeDatos, setMensajeDatos] = useState("");
+  const [eliminando, setEliminando] = useState(false);
 
   useEffect(() => {
     obtenerRutina(alumno.id)
       .then((r) => {
         setRoutine(r);
         setDiaActivo(r.dias[0]?.nombre ?? null);
+        // la rutina completa trae la fecha más al día que el listado
+        // (que puede venir de un caché de 60s).
+        if (r.fechaCreacion) setFechaCreacion(r.fechaCreacion);
       })
       .catch((err) =>
         setError(err instanceof Error ? err.message : "No se pudo cargar la rutina.")
@@ -47,13 +54,25 @@ export function RoutineEditor({
     setGuardandoDatos(true);
     setMensajeDatos("");
     try {
-      await actualizarAlumno(password, alumno.id, { nombreAlumno: nombre, tipoPlan });
-      onAlumnoActualizado({ ...alumno, alumno: nombre, tipoPlan });
+      await actualizarAlumno(password, alumno.id, { nombreAlumno: nombre, tipoPlan, fechaCreacion });
+      onAlumnoActualizado({ ...alumno, alumno: nombre, tipoPlan, fechaCreacion });
       setMensajeDatos("Guardado.");
     } catch (err) {
       setMensajeDatos(err instanceof Error ? err.message : "No se pudo guardar.");
     } finally {
       setGuardandoDatos(false);
+    }
+  }
+
+  async function eliminarAlumnoActual() {
+    if (!confirm(`¿Borrar la rutina de ${alumno.alumno}? No se puede deshacer.`)) return;
+    setEliminando(true);
+    try {
+      await eliminarAlumno(password, alumno.id);
+      onAlumnoEliminado(alumno.id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo eliminar.");
+      setEliminando(false);
     }
   }
 
@@ -108,10 +127,35 @@ export function RoutineEditor({
             {guardandoDatos ? "Guardando..." : "Guardar"}
           </button>
         </div>
+
+        <div className="mt-3">
+          <label className="mb-1 block text-xs text-muted">
+            Fecha de creación del plan (para saber cuándo renovarlo)
+          </label>
+          <input
+            type="date"
+            value={fechaCreacion}
+            onChange={(e) => setFechaCreacion(e.target.value)}
+            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+          />
+        </div>
+
         {mensajeDatos ? <p className="mt-2 text-sm text-muted">{mensajeDatos}</p> : null}
         <p className="mt-2 text-xs text-muted">
           Link del alumno: <code>focus-entrena.web.app/r/{alumno.id}</code>
         </p>
+
+        <div className="mt-4 border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={eliminarAlumnoActual}
+            disabled={eliminando}
+            className="flex items-center gap-1.5 text-sm text-muted hover:text-red-400 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {eliminando ? "Eliminando..." : "Eliminar alumno"}
+          </button>
+        </div>
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

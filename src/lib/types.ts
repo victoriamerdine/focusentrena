@@ -23,6 +23,8 @@ export interface Day {
 export interface Routine {
   alumno: string;
   tipoPlan: string;
+  // "yyyy-MM-dd" o "" si todavía no se cargó.
+  fechaCreacion: string;
   dias: Day[];
 }
 

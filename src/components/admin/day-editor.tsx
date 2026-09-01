@@ -3,6 +3,7 @@
 import { Plus, Save } from "lucide-react";
 import { useState } from "react";
 
+import { DaySummary } from "@/components/admin/day-summary";
 import { ExerciseRowEditor } from "@/components/admin/exercise-row-editor";
 import type { Catalogo } from "@/lib/admin-types";
 import type { Exercise } from "@/lib/types";
@@ -79,6 +80,8 @@ export function DayEditor({
 
   return (
     <div className="space-y-3">
+      <DaySummary ejercicios={ejercicios} />
+
       {ejercicios.length === 0 ? (
         <p className="text-sm text-muted">Sin ejercicios en este día todavía.</p>
       ) : (

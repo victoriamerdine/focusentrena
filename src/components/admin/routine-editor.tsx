@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DayEditor } from "@/components/admin/day-editor";
+import { WeekSummary } from "@/components/admin/week-summary";
 import { actualizarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
@@ -58,6 +59,16 @@ export function RoutineEditor({
 
   async function handleGuardarDia(diaNombre: string, ejercicios: Exercise[]) {
     await guardarDia(password, alumno.id, diaNombre, ejercicios);
+    // así el resumen semanal refleja lo recién guardado sin esperar a
+    // recargar toda la rutina.
+    setRoutine((prev) =>
+      prev
+        ? {
+            ...prev,
+            dias: prev.dias.map((d) => (d.nombre === diaNombre ? { ...d, ejercicios } : d)),
+          }
+        : prev
+    );
   }
 
   return (
@@ -114,6 +125,8 @@ export function RoutineEditor({
 
       {routine ? (
         <div className="space-y-4">
+          <WeekSummary dias={routine.dias} />
+
           <div className="flex flex-wrap gap-2">
             {routine.dias.map((dia) => (
               <button

@@ -265,31 +265,6 @@ function agregarEncabezadosAgrupador() {
   Logger.log(`Listo. Se agregó el encabezado "Agrupador" en ${hojasActualizadas} hoja(s).`);
 }
 
-// Migración one-off: escribe la etiqueta "Fecha de creación:" en A5 de
-// "Template Rutina" y de todas las hojas de alumnos existentes (no toca
-// B5 — el valor lo carga el entrenador a mano desde el panel para las
-// rutinas que ya existían, o queda vacío hasta que lo complete). No pisa
-// nada que ya esté escrito en A5. Correr una sola vez desde el editor.
-function agregarEncabezadoFechaCreacion() {
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
-
-  let hojasActualizadas = 0;
-
-  ss.getSheets().forEach(hoja => {
-    if (excluir.includes(hoja.getName())) return;
-
-    const celda = hoja.getRange("A5");
-    if (String(celda.getValue() || "").trim()) return; // ya tiene algo, no se pisa
-
-    celda.setValue("Fecha de creación:");
-    hojasActualizadas++;
-  });
-
-  Logger.log(`Listo. Se agregó el encabezado "Fecha de creación" en ${hojasActualizadas} hoja(s).`);
-}
-
 // Configura el formato condicional de "Template Rutina" y de todas las
 // hojas de alumnos existentes: pinta cada fila según el número que tenga
 // en la columna Agrupador (I), con los mismos colores exactos que usa la
@@ -396,11 +371,8 @@ function crearHojaRutina(ss, nombreAlumno, tipoPlan) {
   const id = generarIdUnico(ss, nombreAlumno);
   nuevaHoja.getRange("E2").setValue(id);
 
-  // Fila 5 = espaciador libre en Template Rutina (entre "Tipo De Plan" y
-  // "Día 1"), se usa para la fecha de creación — así se sabe cuándo toca
-  // renovar el plan.
-  nuevaHoja.getRange("A5").setValue("Fecha de creación:");
-  nuevaHoja.getRange("B5").setValue(new Date());
+  // Fecha de creación, para saber cuándo toca renovar el plan.
+  nuevaHoja.getRange("E4").setValue(new Date());
 
   invalidarIndiceAlumnos();
   invalidarListaAlumnos();
@@ -742,7 +714,7 @@ function limpiarCacheEntrenador() {
 // "yyyy-MM-dd" (o "" si la celda está vacía o no es una fecha), usando el
 // huso horario del script para no correr el día por conversión a UTC.
 function leerFechaCreacion(hoja) {
-  const valor = hoja.getRange("B5").getValue();
+  const valor = hoja.getRange("E4").getValue();
   if (!(valor instanceof Date)) return "";
   return Utilities.formatDate(valor, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
@@ -1070,14 +1042,14 @@ function manejarListarAlumnos(ss) {
   const resultado = ss.getSheets()
     .filter(h => !excluir.includes(h.getName()))
     .map(h => {
-      // B2, B4, E2 y B5 en una sola lectura por hoja (antes eran 3
+      // B2, B4, E2 y E4 en una sola lectura por hoja (antes eran 3
       // llamadas separadas) — con muchos alumnos esto era lo que más
       // pesaba al entrar al panel.
-      const bloque = h.getRange(2, 1, 4, 5).getValues();
+      const bloque = h.getRange(2, 1, 3, 5).getValues();
       const alumno = String(bloque[0][1] || "").trim(); // B2
       const tipoPlan = String(bloque[2][1] || "").trim(); // B4
       const id = String(bloque[0][4] || "").trim(); // E2
-      const fechaCreacionValor = bloque[3][1]; // B5
+      const fechaCreacionValor = bloque[2][4]; // E4
       const fechaCreacion = fechaCreacionValor instanceof Date
         ? Utilities.formatDate(fechaCreacionValor, zonaHoraria, "yyyy-MM-dd")
         : "";
@@ -1238,8 +1210,7 @@ function manejarActualizarAlumno(ss, datos) {
     const partes = datos.fechaCreacion.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (partes) {
       const fecha = new Date(Number(partes[1]), Number(partes[2]) - 1, Number(partes[3]), 12, 0, 0);
-      hoja.getRange("A5").setValue("Fecha de creación:");
-      hoja.getRange("B5").setValue(fecha);
+      hoja.getRange("E4").setValue(fecha);
     }
   }
 

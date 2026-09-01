@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
+import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
 import { crearAlumno, eliminarAlumno } from "@/lib/admin-api";
 import { formatearFecha } from "@/lib/format-fecha";
 import type { AlumnoResumen } from "@/lib/admin-types";
@@ -97,7 +98,10 @@ export function AlumnoDashboard({
               className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3"
             >
               <button type="button" onClick={() => onEditar(a)} className="min-w-0 flex-1 text-left">
-                <p className="truncate font-semibold text-foreground">{a.alumno}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate font-semibold text-foreground">{a.alumno}</p>
+                  {a.fechaCreacion ? <BadgeRenovacion fechaCreacion={a.fechaCreacion} /> : null}
+                </div>
                 <p className="truncate text-xs text-muted">
                   {a.tipoPlan || "—"} · /r/{a.id}
                   {a.fechaCreacion ? ` · Creado ${formatearFecha(a.fechaCreacion)}` : ""}

@@ -3,6 +3,7 @@
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
 import { DayEditor } from "@/components/admin/day-editor";
 import { WeekSummary } from "@/components/admin/week-summary";
 import { actualizarAlumno, eliminarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
@@ -132,12 +133,15 @@ export function RoutineEditor({
           <label className="mb-1 block text-xs text-muted">
             Fecha de creación del plan (para saber cuándo renovarlo)
           </label>
-          <input
-            type="date"
-            value={fechaCreacion}
-            onChange={(e) => setFechaCreacion(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={fechaCreacion}
+              onChange={(e) => setFechaCreacion(e.target.value)}
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            />
+            {fechaCreacion ? <BadgeRenovacion fechaCreacion={fechaCreacion} /> : null}
+          </div>
         </div>
 
         {mensajeDatos ? <p className="mt-2 text-sm text-muted">{mensajeDatos}</p> : null}

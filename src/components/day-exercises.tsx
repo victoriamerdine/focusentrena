@@ -2,7 +2,15 @@ import { ExerciseCard } from "@/components/exercise-card";
 import { groupExercises } from "@/lib/group-exercises";
 import type { Exercise } from "@/lib/types";
 
-export function DayExercises({ ejercicios }: { ejercicios: Exercise[] }) {
+export function DayExercises({
+  ejercicios,
+  id,
+  diaNombre,
+}: {
+  ejercicios: Exercise[];
+  id?: string;
+  diaNombre?: string;
+}) {
   const groups = groupExercises(ejercicios);
 
   return (
@@ -23,13 +31,15 @@ export function DayExercises({ ejercicios }: { ejercicios: Exercise[] }) {
             <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
               {group.items.map((ex, i) => (
                 <div key={i} className="w-[82%] shrink-0 snap-start sm:w-[380px]">
-                  <ExerciseCard exercise={ex} badge={String(i + 1)} />
+                  <ExerciseCard exercise={ex} badge={String(i + 1)} id={id} diaNombre={diaNombre} />
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          group.items.map((ex, i) => <ExerciseCard key={`${gi}-${i}`} exercise={ex} />)
+          group.items.map((ex, i) => (
+            <ExerciseCard key={`${gi}-${i}`} exercise={ex} id={id} diaNombre={diaNombre} />
+          ))
         )
       )}
     </div>

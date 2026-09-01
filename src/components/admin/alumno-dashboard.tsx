@@ -4,7 +4,9 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
+import { CopyLinkButton } from "@/components/admin/copy-link-button";
 import { crearAlumno, eliminarAlumno } from "@/lib/admin-api";
+import { linkAlumno } from "@/lib/config";
 import { formatearFecha } from "@/lib/format-fecha";
 import type { AlumnoResumen } from "@/lib/admin-types";
 
@@ -107,6 +109,7 @@ export function AlumnoDashboard({
                   {a.fechaCreacion ? ` · Creado ${formatearFecha(a.fechaCreacion)}` : ""}
                 </p>
               </button>
+              <CopyLinkButton url={linkAlumno(a.id)} label="Link" />
               <button
                 type="button"
                 onClick={() => eliminar(a.id, a.alumno)}

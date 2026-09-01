@@ -19,6 +19,8 @@ const EJERCICIO_VACIO: Exercise = {
   video: "",
   agrupador: "",
   grupo: "",
+  notaAlumno: "",
+  carga: "",
 };
 
 export function DayEditor({

@@ -265,6 +265,55 @@ function agregarEncabezadosAgrupador() {
   Logger.log(`Listo. Se agregó el encabezado "Agrupador" en ${hojasActualizadas} hoja(s).`);
 }
 
+// Mismo mecanismo que agregarEncabezadosAgrupador() pero para las columnas
+// J (Nota Alumno) y K (Carga) — las agregó Vicky a mano en "Template
+// Rutina", así que acá solo hace falta backfillearlas en las hojas de
+// alumnos que ya existían antes de esas columnas. Correr una sola vez
+// desde el editor (▶ Run) — es seguro correrla de nuevo, no pisa nada que
+// ya tenga contenido.
+function agregarEncabezadosNotasCarga() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
+
+  let hojasActualizadas = 0;
+
+  ss.getSheets().forEach(hoja => {
+
+    if (excluir.includes(hoja.getName())) return;
+
+    const lastRow = hoja.getLastRow();
+    if (lastRow < 1) return;
+
+    const valores = hoja.getRange(1, 1, lastRow, 2).getValues();
+    let tocada = false;
+
+    for (let r = 0; r < valores.length; r++) {
+      const colA = String(valores[r][0] || "").trim();
+      const colB = String(valores[r][1] || "").trim();
+      const esEtiquetaDia = DAY_REGEX.test(colA) || DAY_REGEX.test(colB);
+      if (!esEtiquetaDia) continue;
+
+      const filaEncabezado = r + 2; // la fila siguiente a la etiqueta del día
+      const celdaNota = hoja.getRange(filaEncabezado, 10); // columna J
+      const celdaCarga = hoja.getRange(filaEncabezado, 11); // columna K
+
+      if (!String(celdaNota.getValue() || "").trim()) {
+        celdaNota.setValue("Nota Alumno");
+        tocada = true;
+      }
+      if (!String(celdaCarga.getValue() || "").trim()) {
+        celdaCarga.setValue("Carga");
+        tocada = true;
+      }
+    }
+
+    if (tocada) hojasActualizadas++;
+  });
+
+  Logger.log(`Listo. Se agregaron los encabezados "Nota Alumno"/"Carga" en ${hojasActualizadas} hoja(s).`);
+}
+
 // Configura el formato condicional de "Template Rutina" y de todas las
 // hojas de alumnos existentes: pinta cada fila según el número que tenga
 // en la columna Agrupador (I), con los mismos colores exactos que usa la
@@ -733,11 +782,12 @@ function construirRutina(hoja) {
   // Se leen los datos, fórmulas y texto enriquecido en bloque (3 llamadas
   // totales) en vez de una llamada por fila — con rutinas de 20-30 filas
   // esto es la diferencia entre ~3 y ~100 llamadas a la API. Columna I =
-  // Agrupador (ver PALETA_GRUPOS más arriba). También se lee el color de
-  // fondo de la columna A: es retrocompatibilidad con rutinas viejas que
-  // agrupaban pintando la fila a mano, antes de que existiera la columna
-  // Agrupador (ver aplicarRetrocompatibilidadDeGrupos).
-  const rango = hoja.getRange(1, 1, lastRow, 9);
+  // Agrupador (ver PALETA_GRUPOS más arriba); J = Nota Alumno, K = Carga
+  // (las llena el alumno desde su vista, ver manejarGuardarNotaAlumno).
+  // También se lee el color de fondo de la columna A: es retrocompatibilidad
+  // con rutinas viejas que agrupaban pintando la fila a mano, antes de que
+  // existiera la columna Agrupador (ver aplicarRetrocompatibilidadDeGrupos).
+  const rango = hoja.getRange(1, 1, lastRow, 11);
   const valores = rango.getValues();
   const formulas = rango.getFormulas();
   const richTexts = rango.getRichTextValues();
@@ -762,12 +812,19 @@ function construirRutina(hoja) {
 
     if (!diaActual) continue;
     if (esFilaEncabezado(colA, colB)) continue;
-    if (esFilaVacia(fila)) continue;
+    // La fila se considera vacía en base a A-I solamente: una nota/carga
+    // vieja que haya quedado huérfana en J/K (por ejemplo, un ejercicio que
+    // se borró) no debe hacer aparecer una fila fantasma.
+    if (esFilaVacia(fila.slice(0, 9))) continue;
 
     const colorFondo = coloresColA[r][0];
     const colorLegado = (!colorFondo || colorFondo.toLowerCase() === "#ffffff") ? "" : colorFondo;
 
     diaActual.ejercicios.push({
+      // Posición dentro de los ejercicios de este día (0-based) — la usa el
+      // alumno para guardar su nota/carga en la fila correcta, sin exponer
+      // el número de fila real de la hoja.
+      indice: diaActual.ejercicios.length,
       patron: colA,
       ejercicio: colB,
       series: formatearValor(fila[2]),
@@ -778,6 +835,8 @@ function construirRutina(hoja) {
       video: extraerLinkVideoDeCelda(fila[7], formulas[r][7], richTexts[r][7]),
       agrupador: formatearValor(fila[8]),
       grupo: "", // lo completa aplicarRetrocompatibilidadDeGrupos() más abajo
+      notaAlumno: String(fila[9] || "").trim(),
+      carga: formatearValor(fila[10]),
       _colorLegado: colorLegado, // temporal, no queda en la respuesta final
     });
   }
@@ -965,6 +1024,14 @@ function verificarPassword(password) {
   return !!guardada && String(password || "") === guardada;
 }
 
+// Acciones que el alumno puede disparar desde su propia vista, sin la
+// contraseña del entrenador (no tiene forma de escribirla). Sólo dejan
+// tocar su nota personal y la carga usada — nada que afecte la rutina en
+// sí. Mismo modelo de "seguridad" que ya tiene el link de lectura: alcanza
+// con conocer el id del alumno, que no es secreto (es el link que se
+// comparte).
+const ACCIONES_PUBLICAS = ["guardar_nota_alumno"];
+
 function doPost(e) {
 
   let datos;
@@ -975,7 +1042,9 @@ function doPost(e) {
     return jsonResponse({ error: "bad_request" });
   }
 
-  if (!verificarPassword(datos.password)) {
+  const esPublica = ACCIONES_PUBLICAS.indexOf(datos.accion) !== -1;
+
+  if (!esPublica && !verificarPassword(datos.password)) {
     return jsonResponse({ error: "unauthorized" });
   }
 
@@ -1004,6 +1073,10 @@ function doPost(e) {
 
       case "guardar_dia":
         manejarGuardarDia(ss, datos);
+        return jsonResponse({ ok: true });
+
+      case "guardar_nota_alumno":
+        manejarGuardarNotaAlumno(ss, datos);
         return jsonResponse({ ok: true });
 
       default:
@@ -1298,6 +1371,39 @@ function manejarGuardarDia(ss, datos) {
 
   invalidarRutinaCache(id);
   aplicarValidacionColumnaA(ss, hoja);
+}
+
+// Guarda la nota personal y la carga que carga el ALUMNO (no el
+// entrenador) desde su propia vista — columnas J y K, que
+// manejarGuardarDia ni siquiera toca (se queda en A:I), así que esto
+// nunca pisa ni es pisado por una edición del entrenador. "indice" es la
+// posición 0-based del ejercicio dentro del día (el mismo que manda
+// construirRutina en cada ejercicio), no el número de fila real.
+function manejarGuardarNotaAlumno(ss, datos) {
+
+  const id = String(datos.id || "").trim();
+  const diaNombre = String(datos.diaNombre || "").trim();
+  const indice = Number(datos.indice);
+
+  if (!id) throw new Error("Falta el id.");
+  if (!diaNombre) throw new Error("Falta el día.");
+  if (!Number.isInteger(indice) || indice < 0) throw new Error("Ejercicio inválido.");
+
+  const hoja = buscarAlumno(id, ss);
+  if (!hoja) throw new Error("No se encontró esa rutina.");
+
+  const bloque = ubicarBloqueDia(hoja, diaNombre);
+  if (!bloque) throw new Error(`No se encontró el día "${diaNombre}" en esta rutina.`);
+
+  const fila = bloque.filaDatosInicio + indice;
+  if (fila > bloque.filaFin) throw new Error("Ese ejercicio ya no existe en este día.");
+
+  hoja.getRange(fila, 10, 1, 2).setValues([[
+    String(datos.notaAlumno || ""),
+    String(datos.carga || ""),
+  ]]);
+
+  invalidarRutinaCache(id);
 }
 
 // Ubica, sin modificar nada, el rango de filas de datos de un día: desde

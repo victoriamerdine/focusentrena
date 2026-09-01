@@ -1,5 +1,6 @@
 import { Flame, Layers, Repeat, StickyNote, Timer } from "lucide-react";
 
+import { NotaCargaAlumno } from "@/components/nota-carga-alumno";
 import { VideoPreview } from "@/components/video-preview";
 import type { Exercise } from "@/lib/types";
 
@@ -26,9 +27,15 @@ function StatLine({
 export function ExerciseCard({
   exercise,
   badge,
+  id,
+  diaNombre,
 }: {
   exercise: Exercise;
   badge?: string;
+  // Para poder guardar la nota/carga del alumno. Si faltan (o el ejercicio
+  // no trae "indice"), esos campos no se muestran.
+  id?: string;
+  diaNombre?: string;
 }) {
   return (
     <div className="flex h-full gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -61,6 +68,16 @@ export function ExerciseCard({
             <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" strokeWidth={2.5} />
             <span>{exercise.notas}</span>
           </div>
+        ) : null}
+
+        {id && diaNombre && typeof exercise.indice === "number" ? (
+          <NotaCargaAlumno
+            id={id}
+            diaNombre={diaNombre}
+            indice={exercise.indice}
+            notaInicial={exercise.notaAlumno}
+            cargaInicial={exercise.carga}
+          />
         ) : null}
       </div>
 

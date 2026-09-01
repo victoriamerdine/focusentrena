@@ -4,9 +4,11 @@ import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
+import { CopyLinkButton } from "@/components/admin/copy-link-button";
 import { DayEditor } from "@/components/admin/day-editor";
 import { WeekSummary } from "@/components/admin/week-summary";
 import { actualizarAlumno, eliminarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
+import { linkAlumno } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
 import type { Exercise, Routine } from "@/lib/types";
@@ -28,7 +30,9 @@ export function RoutineEditor({
 }) {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [error, setError] = useState("");
-  const [diaActivo, setDiaActivo] = useState<string | null>(null);
+  // Hasta 2 días abiertos a la vez, para poder cargar/comparar dos días sin
+  // ir cambiando de tab todo el tiempo.
+  const [diasActivos, setDiasActivos] = useState<string[]>([]);
 
   const [nombre, setNombre] = useState(alumno.alumno);
   const [tipoPlan, setTipoPlan] = useState(alumno.tipoPlan || "Musculo");
@@ -41,7 +45,7 @@ export function RoutineEditor({
     obtenerRutina(alumno.id)
       .then((r) => {
         setRoutine(r);
-        setDiaActivo(r.dias[0]?.nombre ?? null);
+        setDiasActivos(r.dias[0] ? [r.dias[0].nombre] : []);
         // la rutina completa trae la fecha más al día que el listado
         // (que puede venir de un caché de 60s).
         if (r.fechaCreacion) setFechaCreacion(r.fechaCreacion);
@@ -75,6 +79,21 @@ export function RoutineEditor({
       alert(err instanceof Error ? err.message : "No se pudo eliminar.");
       setEliminando(false);
     }
+  }
+
+  function toggleDia(nombre: string) {
+    setDiasActivos((prev) => {
+      if (prev.includes(nombre)) {
+        // no permitir quedar sin ningún día abierto
+        const next = prev.filter((d) => d !== nombre);
+        return next.length > 0 ? next : prev;
+      }
+      if (prev.length >= 2) {
+        // ya hay 2 abiertos: entra el nuevo, sale el que se abrió primero
+        return [prev[1], nombre];
+      }
+      return [...prev, nombre];
+    });
   }
 
   async function handleGuardarDia(diaNombre: string, ejercicios: Exercise[]) {
@@ -145,9 +164,18 @@ export function RoutineEditor({
         </div>
 
         {mensajeDatos ? <p className="mt-2 text-sm text-muted">{mensajeDatos}</p> : null}
-        <p className="mt-2 text-xs text-muted">
-          Link del alumno: <code>focus-entrena.web.app/r/{alumno.id}</code>
-        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span>Link del alumno:</span>
+          <a
+            href={linkAlumno(alumno.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            {linkAlumno(alumno.id)}
+          </a>
+          <CopyLinkButton url={linkAlumno(alumno.id)} />
+        </div>
 
         <div className="mt-4 border-t border-border pt-3">
           <button
@@ -175,34 +203,37 @@ export function RoutineEditor({
         <div className="space-y-4">
           <WeekSummary dias={routine.dias} />
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {routine.dias.map((dia) => (
               <button
                 key={dia.nombre}
                 type="button"
-                onClick={() => setDiaActivo(dia.nombre)}
+                onClick={() => toggleDia(dia.nombre)}
                 className={cn(
                   "rounded-full border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors",
-                  diaActivo === dia.nombre && "border-primary bg-primary text-primary-foreground"
+                  diasActivos.includes(dia.nombre) && "border-primary bg-primary text-primary-foreground"
                 )}
               >
                 {dia.nombre}
               </button>
             ))}
+            <span className="text-xs text-muted">Podés tener 2 días abiertos a la vez</span>
           </div>
 
-          {routine.dias
-            .filter((dia) => dia.nombre === diaActivo)
-            .map((dia) => (
-              <DayEditor
-                key={dia.nombre}
-                diaNombre={dia.nombre}
-                ejerciciosIniciales={dia.ejercicios}
-                tipoPlan={tipoPlan}
-                catalogo={catalogo}
-                onGuardar={handleGuardarDia}
-              />
-            ))}
+          <div className={cn("grid gap-4", diasActivos.length > 1 && "lg:grid-cols-2")}>
+            {routine.dias
+              .filter((dia) => diasActivos.includes(dia.nombre))
+              .map((dia) => (
+                <DayEditor
+                  key={dia.nombre}
+                  diaNombre={dia.nombre}
+                  ejerciciosIniciales={dia.ejercicios}
+                  tipoPlan={tipoPlan}
+                  catalogo={catalogo}
+                  onGuardar={handleGuardarDia}
+                />
+              ))}
+          </div>
         </div>
       ) : null}
     </div>

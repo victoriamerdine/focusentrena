@@ -103,6 +103,10 @@ export function RoutineView() {
   }
 
   const { routine, refreshing } = state;
+  // El id no cambia durante la vida de la página (viene de la URL con la
+  // que se entró), así que recalcularlo acá es seguro y evita guardarlo
+  // aparte en el estado.
+  const id = getIdFromPath();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 pb-16 pt-10 sm:px-6">
@@ -170,7 +174,7 @@ export function RoutineView() {
                     {dia.ejercicios.length === 0 ? (
                       <p className="text-sm text-muted">Sin ejercicios cargados para este día.</p>
                     ) : (
-                      <DayExercises ejercicios={dia.ejercicios} />
+                      <DayExercises ejercicios={dia.ejercicios} id={id} diaNombre={dia.nombre} />
                     )}
                   </TabsContent>
                 );

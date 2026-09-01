@@ -142,6 +142,19 @@ export function ExerciseRowEditor({
 
       <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
       <Campo label="Link de video" value={exercise.video} onChange={(v) => set("video", v)} />
+
+      {exercise.notaAlumno || exercise.carga ? (
+        <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/5 p-2.5 text-sm">
+          <div>
+            <p className="text-xs text-muted">Carga del alumno</p>
+            <p className="text-foreground">{exercise.carga || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">Nota del alumno</p>
+            <p className="text-foreground">{exercise.notaAlumno || "—"}</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

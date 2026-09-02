@@ -151,6 +151,21 @@ export function ExerciseRowEditor({
             <Campo label="Pausa" value={exercise.pausas} onChange={(v) => set("pausas", v)} />
           </div>
           <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
+
+          {exercise.notaAlumno || exercise.carga ? (
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/5 p-2.5 text-sm">
+              <div>
+                <p className="text-xs text-muted">Carga del alumno</p>
+                {/* Un envío por renglón (ver NotaCargaAlumno) — whitespace-pre-line
+                    para que cada uno se vea en su propia línea. */}
+                <p className="whitespace-pre-line text-foreground">{exercise.carga || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Nota del alumno</p>
+                <p className="whitespace-pre-line text-foreground">{exercise.notaAlumno || "—"}</p>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="shrink-0">
@@ -158,7 +173,9 @@ export function ExerciseRowEditor({
           {/* Sale solo del catálogo (según el ejercicio elegido) — no se
               edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
               El preview embebido es para identificar al toque si es el
-              correcto. */}
+              correcto. Al estar en el mismo flex que el resto de la
+              columna, queda a la altura de todo el bloque (stats + notas
+              + comentarios del alumno), no solo de los primeros campos. */}
           {exercise.video ? (
             <VideoPreview url={exercise.video} />
           ) : (
@@ -166,21 +183,6 @@ export function ExerciseRowEditor({
           )}
         </div>
       </div>
-
-      {exercise.notaAlumno || exercise.carga ? (
-        <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/5 p-2.5 text-sm">
-          <div>
-            <p className="text-xs text-muted">Carga del alumno</p>
-            {/* Un envío por renglón (ver NotaCargaAlumno) — whitespace-pre-line
-                para que cada uno se vea en su propia línea. */}
-            <p className="whitespace-pre-line text-foreground">{exercise.carga || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted">Nota del alumno</p>
-            <p className="whitespace-pre-line text-foreground">{exercise.notaAlumno || "—"}</p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

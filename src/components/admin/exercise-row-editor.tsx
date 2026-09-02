@@ -150,18 +150,19 @@ export function ExerciseRowEditor({
       <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
 
       <div>
-        <label className="mb-1 block text-xs text-muted">Link de video</label>
-        <div className="flex items-start gap-2">
-          <input
-            type="text"
-            className={inputClass}
-            value={exercise.video}
-            onChange={(e) => set("video", e.target.value)}
-          />
-          {/* Preview embebido: para que el profe identifique al toque si
-              es el video correcto, sin tener que abrir el link aparte. */}
-          {exercise.video ? <VideoPreview url={exercise.video} /> : null}
-        </div>
+        <label className="mb-1 block text-xs text-muted">Video</label>
+        {/* Sale solo del catálogo (según el ejercicio elegido) — no se
+            edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
+            El preview embebido es para identificar al toque si es el
+            correcto, y el link chiquito abajo queda de referencia. */}
+        {exercise.video ? (
+          <div className="inline-flex flex-col items-start gap-1">
+            <VideoPreview url={exercise.video} />
+            <p className="max-w-24 break-all text-[11px] text-muted">{exercise.video}</p>
+          </div>
+        ) : (
+          <p className="text-xs text-muted">Sin video para este ejercicio.</p>
+        )}
       </div>
 
       {exercise.notaAlumno || exercise.carga ? (

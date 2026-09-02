@@ -853,10 +853,22 @@ function doGet(e) {
 // recorrer todas las pestañas (una llamada a la API por cada una) en cada
 // visita. crearNuevaRutina() y eliminarRutinasMarcadas() invalidan el
 // caché al tocar la lista de alumnos, así que nunca queda desactualizado
-// más de un momento.
+// más de un momento — pero por las dudas (una hoja se renombró/borró por
+// fuera de la app, o el índice cacheado apunta a una hoja que ya no
+// existe), si la primera búsqueda no encuentra nada se reconstruye el
+// índice una vez y se reintenta antes de darse por vencido.
 function buscarAlumno(id, ss) {
-  const indice = obtenerIndiceAlumnos(ss);
-  const nombreHoja = indice[String(id).trim()];
+  const idLimpio = String(id).trim();
+
+  const hoja = buscarAlumnoEnIndice(idLimpio, ss, obtenerIndiceAlumnos(ss));
+  if (hoja) return hoja;
+
+  invalidarIndiceAlumnos();
+  return buscarAlumnoEnIndice(idLimpio, ss, obtenerIndiceAlumnos(ss));
+}
+
+function buscarAlumnoEnIndice(idLimpio, ss, indice) {
+  const nombreHoja = indice[idLimpio];
   return nombreHoja ? ss.getSheetByName(nombreHoja) : null;
 }
 

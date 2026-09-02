@@ -168,16 +168,19 @@ export function ExerciseRowEditor({
           ) : null}
         </div>
 
-        <div className="shrink-0">
+        {/* flex-col propio para que VideoPreview (self-stretch) tenga un
+            padre flex directo del que estirarse — así ocupa toda la
+            altura disponible debajo del label, hasta el final del
+            bloque de al lado (stats + notas + comentarios del alumno),
+            no solo un thumbnail chico arriba. */}
+        <div className="flex shrink-0 flex-col">
           <label className="mb-1 block text-xs text-muted">Video</label>
           {/* Sale solo del catálogo (según el ejercicio elegido) — no se
               edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
               El preview embebido es para identificar al toque si es el
-              correcto. Al estar en el mismo flex que el resto de la
-              columna, queda a la altura de todo el bloque (stats + notas
-              + comentarios del alumno), no solo de los primeros campos. */}
+              correcto. */}
           {exercise.video ? (
-            <VideoPreview url={exercise.video} />
+            <VideoPreview url={exercise.video} grow />
           ) : (
             <p className="max-w-24 text-xs text-muted">Sin video para este ejercicio.</p>
           )}

@@ -10,9 +10,23 @@ function getYouTubeId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-export function VideoPreview({ url }: { url: string }) {
+export function VideoPreview({
+  url,
+  grow = false,
+}: {
+  url: string;
+  // Por defecto se estira con self-stretch (para cuando VideoPreview es
+  // hijo directo de una fila flex, como en la tarjeta del alumno — el
+  // alto de la fila ya lo da el resto del contenido). grow usa flex-1 en
+  // vez de self-stretch, para cuando el padre directo es una COLUMNA
+  // flex (como en el panel del entrenador, con el label "Video" arriba)
+  // — ahí lo que hace falta es crecer en el eje principal, no estirarse
+  // en el cruzado.
+  grow?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const videoId = getYouTubeId(url);
+  const tamanoClase = grow ? "flex-1" : "self-stretch";
 
   if (!videoId) {
     return (
@@ -20,7 +34,7 @@ export function VideoPreview({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex h-24 w-20 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground sm:h-28 sm:w-24"
+        className={`flex min-h-24 w-20 shrink-0 items-center justify-center ${tamanoClase} rounded-lg bg-primary text-primary-foreground sm:min-h-28 sm:w-24`}
         aria-label="Ver video"
       >
         <Video className="h-5 w-5" strokeWidth={2.5} />
@@ -35,7 +49,13 @@ export function VideoPreview({ url }: { url: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group relative block h-24 w-20 shrink-0 overflow-hidden rounded-lg bg-black sm:h-28 sm:w-24"
+        // Altura: self-stretch o flex-1 según el contexto (ver arriba) en
+        // vez de una altura fija, para que ocupe todo el alto disponible
+        // junto a un bloque de contenido más alto (por ejemplo, con las
+        // notas del alumno debajo) en vez de quedar corto. min-h como
+        // piso por si el contenido de al lado es más bajo que un
+        // thumbnail.
+        className={`group relative block min-h-24 w-20 shrink-0 ${tamanoClase} overflow-hidden rounded-lg bg-black sm:min-h-28 sm:w-24`}
         aria-label="Reproducir video"
       >
         <img

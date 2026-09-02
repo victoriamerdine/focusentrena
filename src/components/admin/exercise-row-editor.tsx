@@ -132,37 +132,42 @@ export function ExerciseRowEditor({
         en una misma serie.
       </p>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Campo label="Series" value={exercise.series} onChange={(v) => set("series", v)} />
-        <Campo
-          label="Repeticiones"
-          value={exercise.repeticiones}
-          onChange={(v) => set("repeticiones", v)}
-        />
-        <Campo
-          label="Intensidad"
-          value={exercise.intensidad}
-          onChange={(v) => set("intensidad", v)}
-        />
-        <Campo label="Pausa" value={exercise.pausas} onChange={(v) => set("pausas", v)} />
-      </div>
-
-      <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
-
-      <div>
-        <label className="mb-1 block text-xs text-muted">Video</label>
-        {/* Sale solo del catálogo (según el ejercicio elegido) — no se
-            edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
-            El preview embebido es para identificar al toque si es el
-            correcto, y el link chiquito abajo queda de referencia. */}
-        {exercise.video ? (
-          <div className="inline-flex flex-col items-start gap-1">
-            <VideoPreview url={exercise.video} />
-            <p className="max-w-24 break-all text-[11px] text-muted">{exercise.video}</p>
+      <div className="flex gap-3">
+        <div className="flex-1 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Campo label="Series" value={exercise.series} onChange={(v) => set("series", v)} />
+            <Campo
+              label="Repeticiones"
+              value={exercise.repeticiones}
+              onChange={(v) => set("repeticiones", v)}
+            />
           </div>
-        ) : (
-          <p className="text-xs text-muted">Sin video para este ejercicio.</p>
-        )}
+          <div className="grid grid-cols-2 gap-2">
+            <Campo
+              label="Intensidad"
+              value={exercise.intensidad}
+              onChange={(v) => set("intensidad", v)}
+            />
+            <Campo label="Pausa" value={exercise.pausas} onChange={(v) => set("pausas", v)} />
+          </div>
+          <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
+        </div>
+
+        <div className="shrink-0">
+          <label className="mb-1 block text-xs text-muted">Video</label>
+          {/* Sale solo del catálogo (según el ejercicio elegido) — no se
+              edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
+              El preview embebido es para identificar al toque si es el
+              correcto, y el link chiquito abajo queda de referencia. */}
+          {exercise.video ? (
+            <div className="inline-flex flex-col items-start gap-1">
+              <VideoPreview url={exercise.video} />
+              <p className="max-w-24 break-all text-[11px] text-muted">{exercise.video}</p>
+            </div>
+          ) : (
+            <p className="max-w-24 text-xs text-muted">Sin video para este ejercicio.</p>
+          )}
+        </div>
       </div>
 
       {exercise.notaAlumno || exercise.carga ? (

@@ -1542,32 +1542,57 @@ function manejarGuardarDia(ss, datos) {
 
   const totalFilas = filaFinReal - bloque.filaDatosInicio + 1;
 
+  // Antes de tocar nada: se lee J/K (nota y carga del alumno) tal cual
+  // están ahora mismo en la hoja — no lo que el entrenador tenía cargado
+  // en su editor, que puede ser de hace rato y no incluir un envío más
+  // reciente del alumno. Se guarda por posición ORIGINAL (0-based dentro
+  // del día, "indice" — el mismo que manda construirRutina y que cada
+  // ejercicio sigue trayendo aunque se haya arrastrado a otra serie),
+  // así el historial se reubica junto con su ejercicio en vez de
+  // quedarse pegado a la fila vieja si el entrenador reordenó.
+  const notaCargaPorIndiceOriginal = {};
+  if (capacidad > 0) {
+    hoja.getRange(bloque.filaDatosInicio, 10, capacidad, 2).getValues().forEach((fila, i) => {
+      notaCargaPorIndiceOriginal[i] = [String(fila[0] || ""), String(fila[1] || "")];
+    });
+  }
+
   if (totalFilas > 0) {
 
-    // 9 columnas: A-H igual que antes + I (Agrupador). Ya no se toca el
-    // color de fondo de la fila — el agrupamiento se calcula del lado del
-    // servidor a partir del valor de "Agrupador" (ver colorearGruposPorDia),
-    // así que no hay nada de formato que preservar ni que se pueda perder.
-    const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 9);
+    // 11 columnas: A-I igual que antes + J/K (nota y carga del alumno,
+    // reubicadas más abajo). Ya no se toca el color de fondo de la fila —
+    // el agrupamiento se calcula del lado del servidor a partir del valor
+    // de "Agrupador" (ver colorearGruposPorDia), así que no hay nada de
+    // formato que preservar ni que se pueda perder.
+    const rango = hoja.getRange(bloque.filaDatosInicio, 1, totalFilas, 11);
     rango.clearContent();
     rango.clearDataValidations(); // si no, Sheets rechaza el valor nuevo por la
                                    // validación vieja que dejó filterPatterns
 
     if (ejercicios.length > 0) {
 
-      const filas = ejercicios.map(ex => [
-        String(ex.patron || ""),
-        String(ex.ejercicio || ""),
-        String(ex.series || ""),
-        String(ex.repeticiones || ""),
-        String(ex.intensidad || ""),
-        String(ex.pausas || ""),
-        String(ex.notas || ""),
-        String(ex.video || ""),
-        String(ex.agrupador || ""),
-      ]);
+      const filas = ejercicios.map(ex => {
+        const indiceOriginal = Number(ex.indice);
+        const notaCarga = Number.isInteger(indiceOriginal) && notaCargaPorIndiceOriginal[indiceOriginal]
+          ? notaCargaPorIndiceOriginal[indiceOriginal]
+          : ["", ""]; // ejercicio nuevo (agregado en el editor): sin historial todavía
 
-      hoja.getRange(bloque.filaDatosInicio, 1, ejercicios.length, 9).setValues(filas);
+        return [
+          String(ex.patron || ""),
+          String(ex.ejercicio || ""),
+          String(ex.series || ""),
+          String(ex.repeticiones || ""),
+          String(ex.intensidad || ""),
+          String(ex.pausas || ""),
+          String(ex.notas || ""),
+          String(ex.video || ""),
+          String(ex.agrupador || ""),
+          notaCarga[0],
+          notaCarga[1],
+        ];
+      });
+
+      hoja.getRange(bloque.filaDatosInicio, 1, ejercicios.length, 11).setValues(filas);
     }
   }
 
@@ -1576,11 +1601,12 @@ function manejarGuardarDia(ss, datos) {
 }
 
 // Guarda la nota personal y la carga que carga el ALUMNO (no el
-// entrenador) desde su propia vista — columnas J y K, que
-// manejarGuardarDia ni siquiera toca (se queda en A:I), así que esto
-// nunca pisa ni es pisado por una edición del entrenador. "indice" es la
-// posición 0-based del ejercicio dentro del día (el mismo que manda
-// construirRutina en cada ejercicio), no el número de fila real.
+// entrenador) desde su propia vista — columnas J y K. manejarGuardarDia
+// las reubica junto con su ejercicio si el entrenador reordena, pero
+// nunca las pisa con datos viejos (lee la hoja de nuevo justo antes de
+// escribir). "indice" es la posición 0-based del ejercicio dentro del
+// día (el mismo que manda construirRutina en cada ejercicio), no el
+// número de fila real.
 //
 // Cada envío AGREGA un renglón dentro de la misma celda (separado por
 // salto de línea) en vez de pisar el anterior — así el alumno va viendo

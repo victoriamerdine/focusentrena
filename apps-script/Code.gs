@@ -1226,20 +1226,37 @@ function manejarListarAlumnos(ss) {
     }
   }
 
+  const idsUsados = {};
+
   const resultado = ss.getSheets()
     .filter(esHojaDeAlumno)
     .map(h => {
       // Una sola lectura por hoja (mismo helper que usa construirRutina).
       const encabezado = leerEncabezadoHoja(h);
+      let id = encabezado.id;
+
+      // Hoja de plan sin id (se creó o se le cambió el nombre a mano en
+      // Sheets, no desde la app) o con un id repetido de otra hoja (se
+      // copió la pestaña entera sin pasar por "Duplicar plan"): se le
+      // genera uno nuevo acá mismo, a partir del nombre, para que quede
+      // utilizable sin que el entrenador tenga que tocar E2 a mano.
+      if (!id || idsUsados[id]) {
+        const nombreBase = encabezado.alumno || h.getName().replace(/\s*-\s*Rutina\s*$/i, "").trim() || h.getName();
+        id = generarIdUnico(ss, nombreBase);
+        h.getRange("E2").setValue(id);
+        invalidarIndiceAlumnos();
+      }
+
+      idsUsados[id] = true;
+
       return {
-        id: encabezado.id,
+        id: id,
         alumno: encabezado.alumno || h.getName(),
         tipoPlan: encabezado.tipoPlan,
         hoja: h.getName(),
         fechaCreacion: encabezado.fechaCreacion,
       };
     })
-    .filter(a => a.id)
     .sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
 
   const json = JSON.stringify(resultado);

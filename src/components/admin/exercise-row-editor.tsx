@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 
 import { SearchableSelect } from "@/components/admin/searchable-select";
 import type { Catalogo } from "@/lib/admin-types";
+import { normalizarNombreEjercicio } from "@/lib/normalizar-ejercicio";
 import type { Exercise } from "@/lib/types";
 
 const inputClass =
@@ -63,7 +64,12 @@ export function ExerciseRowEditor({
   }
 
   function onEjercicioChange(nombre: string) {
-    const video = catalogo.videosPorEjercicio[nombre] || "";
+    // El catálogo guarda videosPorEjercicio con la clave normalizada (ver
+    // normalizarNombreEjercicio): en EjerciciosConsolidado el mismo
+    // ejercicio puede tener el video cargado en una fila cuya grafía
+    // difiere apenas (mayúsculas, espacios, tildes) de la fila que arma
+    // esta opción del desplegable.
+    const video = catalogo.videosPorEjercicio[normalizarNombreEjercicio(nombre)] || "";
     onChange({ ...exercise, ejercicio: nombre, video });
   }
 

@@ -572,6 +572,26 @@ function slugify(str) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Normaliza un nombre de ejercicio para usarlo como clave al armar
+// videosPorEjercicio: en EjerciciosConsolidado el mismo ejercicio puede
+// aparecer en más de una fila (una por cada Patrón/Músculo en el que
+// categoriza), y el video puede estar cargado en una fila cuya grafía del
+// nombre difiere apenas de la fila que arma la opción del desplegable
+// (mayúsculas, espacios de más, tildes) — sin esto, el link no se
+// autocompletaba al elegir el ejercicio aunque el video sí estuviera
+// cargado en la planilla. Debe coincidir exactamente con
+// normalizarNombreEjercicio() en src/lib/normalizar-ejercicio.ts, que
+// hace la misma normalización del lado del frontend antes de buscar en
+// este mismo mapa.
+function normalizarNombreEjercicio(nombre) {
+  return String(nombre || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
 function actualizarDashboard() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1368,8 +1388,8 @@ function manejarObtenerCatalogo(ss) {
       porMusculoSet[musculo][ejercicio] = true;
     }
 
-    if (link && !videosPorEjercicio[ejercicio]) {
-      videosPorEjercicio[ejercicio] = link;
+    if (link && !videosPorEjercicio[normalizarNombreEjercicio(ejercicio)]) {
+      videosPorEjercicio[normalizarNombreEjercicio(ejercicio)] = link;
     }
   }
 

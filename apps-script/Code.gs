@@ -78,8 +78,16 @@ var PALETA_GRUPOS = ["#bfbfbf", "#ffe599", "#b6d7a8", "#f4cccc", "#a4c2f4", "#ff
 // leía una hoja por cada pestaña no excluida — con muchas hojas sueltas
 // ajenas a los planes, esas lecturas de más eran pura pérdida de tiempo
 // en cada carga del panel.
+//
+// Excepción: hay hojas de referencia/borrador de antes de la app cuyo
+// nombre también contiene "Rutina" pero NO son planes reales — se
+// ignoran por nombre exacto acá.
+var HOJAS_RUTINA_A_IGNORAR = ["Rutina por Patrones"];
+
 function esHojaDePlan(hoja) {
-  return hoja.getName().includes("Rutina");
+  const nombre = hoja.getName();
+  if (!nombre.includes("Rutina")) return false;
+  return !HOJAS_RUTINA_A_IGNORAR.some(fragmento => nombre.includes(fragmento));
 }
 
 // Igual que esHojaDePlan(), pero sin el template — para todo lo que solo
@@ -329,6 +337,35 @@ function agregarEncabezadosNotasCarga() {
   });
 
   Logger.log(`Listo. Se agregaron los encabezados "Nota Alumno"/"Carga" en ${hojasActualizadas} hoja(s).`);
+}
+
+// Limpieza puntual: antes de excluir "Rutina por Patrones" de
+// esHojaDePlan(), manejarListarAlumnos() pudo haberle escrito un id de
+// más en E2 (su lógica de autoreparar hojas sin id). Esta función vacía
+// E2 en esas hojas para dejarlas como estaban. Correr una sola vez desde
+// el editor (▶ Run) — no hace nada si esas hojas ya tienen E2 vacío.
+function limpiarIdsDeHojasIgnoradas() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let hojasLimpiadas = 0;
+
+  ss.getSheets().forEach(hoja => {
+
+    const nombre = hoja.getName();
+    const esIgnorada = HOJAS_RUTINA_A_IGNORAR.some(fragmento => nombre.includes(fragmento));
+    if (!esIgnorada) return;
+
+    const celdaId = hoja.getRange("E2");
+    if (String(celdaId.getValue() || "").trim()) {
+      celdaId.clearContent();
+      hojasLimpiadas++;
+    }
+  });
+
+  invalidarIndiceAlumnos();
+  invalidarListaAlumnos();
+
+  Logger.log(`Listo. Se vació E2 en ${hojasLimpiadas} hoja(s) ignorada(s).`);
 }
 
 // Configura el formato condicional de "Template Rutina" y de todas las

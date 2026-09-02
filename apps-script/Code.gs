@@ -69,6 +69,25 @@ var DAY_REGEX = /^d[ií]a\s*\d+/i;
 // columna "Agrupador". Mismo número dentro de un día = mismo color.
 var PALETA_GRUPOS = ["#bfbfbf", "#ffe599", "#b6d7a8", "#f4cccc", "#a4c2f4", "#ffc000"];
 
+// Toda hoja de plan (la de un alumno, o el template) tiene "Rutina" en el
+// nombre — las de alumno se crean siempre como "<nombre> - Rutina" (ver
+// crearHojaRutinaDesde). Filtrar así, en vez de mantener a mano una lista
+// de hojas a EXCLUIR, es más robusto (cualquier hoja vieja/suelta que se
+// haya ido acumulando en la planilla se ignora sola, sin acordarse de
+// agregarla a ninguna lista) y más rápido: manejarListarAlumnos() antes
+// leía una hoja por cada pestaña no excluida — con muchas hojas sueltas
+// ajenas a los planes, esas lecturas de más eran pura pérdida de tiempo
+// en cada carga del panel.
+function esHojaDePlan(hoja) {
+  return hoja.getName().includes("Rutina");
+}
+
+// Igual que esHojaDePlan(), pero sin el template — para todo lo que solo
+// debe tocar hojas de alumnos reales.
+function esHojaDeAlumno(hoja) {
+  return esHojaDePlan(hoja) && hoja.getName() !== "Template Rutina";
+}
+
 // ============================================================
 // 1) AUTOMATIZACIÓN DEL SHEET (entrenador) — sin cambios
 // ============================================================
@@ -231,13 +250,12 @@ function aplicarValidacionColumnaA(ss, hoja) {
 function agregarEncabezadosAgrupador() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
 
   let hojasActualizadas = 0;
 
   ss.getSheets().forEach(hoja => {
 
-    if (excluir.includes(hoja.getName())) return;
+    if (!esHojaDePlan(hoja)) return;
 
     const lastRow = hoja.getLastRow();
     if (lastRow < 1) return;
@@ -274,13 +292,12 @@ function agregarEncabezadosAgrupador() {
 function agregarEncabezadosNotasCarga() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
 
   let hojasActualizadas = 0;
 
   ss.getSheets().forEach(hoja => {
 
-    if (excluir.includes(hoja.getName())) return;
+    if (!esHojaDePlan(hoja)) return;
 
     const lastRow = hoja.getLastRow();
     if (lastRow < 1) return;
@@ -324,14 +341,13 @@ function agregarEncabezadosNotasCarga() {
 function aplicarFormatoCondicionalAgrupador() {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const excluir = ["Dashboard", "EjerciciosConsolidado", "Datos", "Volumen Meso"];
   const RANGO_A1 = "A8:I1000";
 
   let hojasActualizadas = 0;
 
   ss.getSheets().forEach(hoja => {
 
-    if (excluir.includes(hoja.getName())) return;
+    if (!esHojaDePlan(hoja)) return;
 
     const rango = hoja.getRange(RANGO_A1);
 
@@ -540,14 +556,7 @@ function actualizarDashboard() {
   const hojas = ss.getSheets();
 
   const lista = hojas
-    .filter(h =>
-      ![
-        "Dashboard",
-        "EjerciciosConsolidado",
-        "Datos",
-        "Volumen Meso"
-      ].includes(h.getName())
-    )
+    .filter(esHojaDeAlumno)
     .map(h => ({
       nombre: h.getName(),
       gid: h.getSheetId()
@@ -653,17 +662,10 @@ function actualizarDashboardUnicavez() {
   dashboard.getRange("B1").setValue("Hoja");
   dashboard.getRange("C1").setValue("Abrir");
 
-  const excluir = [
-    "Dashboard",
-    "EjerciciosConsolidado",
-    "Datos",
-    "Volumen Meso"
-  ];
-
   const filas = [];
 
   ss.getSheets()
-    .filter(h => !excluir.includes(h.getName()))
+    .filter(esHojaDeAlumno)
     .forEach(h => {
 
       let alumno = "";
@@ -706,6 +708,49 @@ function actualizarDashboardUnicavez() {
 // 2) API PARA EL FRONTEND (Next.js)
 // ============================================================
 
+// CacheService no acepta valores de más de 100KB por clave. Hasta ahora,
+// cuando un JSON cacheable (catálogo, listado de alumnos, rutina de un
+// alumno con muchos días) superaba ese límite, el chequeo `if (json.length
+// < 100000)` simplemente NO cacheaba nada — sin error, sin aviso — y esa
+// respuesta se recalculaba de cero en CADA visita al panel, todo el
+// tiempo. Con ~1400 filas en EjerciciosConsolidado esto es un sospechoso
+// directo de la lentitud del panel: si el catálogo creció más allá de
+// 100KB en algún momento, el caché de 30 minutos dejó de servir de nada.
+// Estas dos funciones parten el JSON en pedazos de <100KB y los guardan
+// bajo claves numeradas (clave_n = cantidad de pedazos, clave_0, clave_1,
+// ...), así el caché funciona sin importar el tamaño.
+function cachePutGrande(cache, key, value, ttlSegundos) {
+  const TAMANO_PEDAZO = 90000; // margen bajo el límite de 100KB
+  const pedazos = [];
+  for (let i = 0; i < value.length; i += TAMANO_PEDAZO) {
+    pedazos.push(value.slice(i, i + TAMANO_PEDAZO));
+  }
+  // put() uno por uno (no putAll) para no depender de si CacheService le
+  // pone además un límite propio al tamaño total de un solo putAll().
+  cache.put(key + "_n", String(pedazos.length), ttlSegundos);
+  pedazos.forEach((p, i) => cache.put(key + "_" + i, p, ttlSegundos));
+}
+
+function cacheGetGrande(cache, key) {
+  const n = Number(cache.get(key + "_n"));
+  if (!n) return null;
+  let texto = "";
+  for (let i = 0; i < n; i++) {
+    const pedazo = cache.get(key + "_" + i);
+    if (pedazo == null) return null; // falta un pedazo (venció desalineado) => cache miss
+    texto += pedazo;
+  }
+  return texto;
+}
+
+function cacheRemoveGrande(cache, key) {
+  const n = Number(cache.get(key + "_n"));
+  if (!n) return;
+  const claves = [key + "_n"];
+  for (let i = 0; i < n; i++) claves.push(key + "_" + i);
+  cache.removeAll(claves);
+}
+
 function doGet(e) {
 
   const id = e && e.parameter ? e.parameter.id : null;
@@ -721,7 +766,7 @@ function doGet(e) {
   // visitas seguidas (recargar la página, revisar durante el entreno, etc).
   const cache = CacheService.getScriptCache();
   const cacheKey = "rutina_" + id;
-  const cacheado = cache.get(cacheKey);
+  const cacheado = cacheGetGrande(cache, cacheKey);
 
   if (cacheado) {
     return ContentService
@@ -740,9 +785,7 @@ function doGet(e) {
   const rutina = construirRutina(hoja);
   const json = JSON.stringify(rutina);
 
-  if (json.length < 100000) { // límite de CacheService por valor
-    cache.put(cacheKey, json, 90);
-  }
+  cachePutGrande(cache, cacheKey, json, 90);
 
   return ContentService
     .createTextOutput(json)
@@ -801,7 +844,7 @@ function invalidarIndiceAlumnos() {
 }
 
 function invalidarListaAlumnos() {
-  CacheService.getScriptCache().remove("lista_alumnos_v1");
+  cacheRemoveGrande(CacheService.getScriptCache(), "lista_alumnos_v1");
 }
 
 // Vacía a mano todos los cachés del panel del entrenador (índice de
@@ -814,8 +857,8 @@ function invalidarListaAlumnos() {
 function limpiarCacheEntrenador() {
   const cache = CacheService.getScriptCache();
   cache.remove("indice_alumnos_v1");
-  cache.remove("lista_alumnos_v1");
-  cache.remove("catalogo_v1");
+  cacheRemoveGrande(cache, "lista_alumnos_v1");
+  cacheRemoveGrande(cache, "catalogo_v1");
 }
 
 // B2, E2, B4 y E4 en una sola lectura (antes eran hasta 4 llamadas
@@ -1173,7 +1216,7 @@ function manejarListarAlumnos(ss) {
 
   const cache = CacheService.getScriptCache();
   const cacheKey = "lista_alumnos_v1";
-  const cacheado = cache.get(cacheKey);
+  const cacheado = cacheGetGrande(cache, cacheKey);
 
   if (cacheado) {
     try {
@@ -1183,16 +1226,8 @@ function manejarListarAlumnos(ss) {
     }
   }
 
-  const excluir = [
-    "Dashboard",
-    "EjerciciosConsolidado",
-    "Datos",
-    "Volumen Meso",
-    "Template Rutina"
-  ];
-
   const resultado = ss.getSheets()
-    .filter(h => !excluir.includes(h.getName()))
+    .filter(esHojaDeAlumno)
     .map(h => {
       // Una sola lectura por hoja (mismo helper que usa construirRutina).
       const encabezado = leerEncabezadoHoja(h);
@@ -1208,9 +1243,11 @@ function manejarListarAlumnos(ss) {
     .sort((a, b) => a.alumno.localeCompare(b.alumno, "es", { sensitivity: "base" }));
 
   const json = JSON.stringify(resultado);
-  if (json.length < 100000) {
-    cache.put(cacheKey, json, 60);
-  }
+  // 3 minutos en vez de 1: el listado no cambia tan seguido como para
+  // justificar recalcularlo (una lectura por cada hoja de alumno) en cada
+  // visita al panel dentro de una misma sesión de trabajo. Se invalida
+  // solo de todos modos al crear/editar/borrar/duplicar un alumno.
+  cachePutGrande(cache, cacheKey, json, 180);
 
   return resultado;
 }
@@ -1219,7 +1256,7 @@ function manejarObtenerCatalogo(ss) {
 
   const cache = CacheService.getScriptCache();
   const cacheKey = "catalogo_v1";
-  const cacheado = cache.get(cacheKey);
+  const cacheado = cacheGetGrande(cache, cacheKey);
 
   if (cacheado) {
     try {
@@ -1304,12 +1341,13 @@ function manejarObtenerCatalogo(ss) {
   };
 
   // EjerciciosConsolidado cambia poco, así que el caché dura media hora.
-  // Si el catálogo no entra en el límite de 100KB por valor de
-  // CacheService, sigue funcionando igual, simplemente sin cachear.
+  // Con ~1400 filas el JSON resultante puede superar fácil los 100KB que
+  // acepta CacheService por clave — cachePutGrande() lo parte en pedazos
+  // para que el caché siga funcionando sin importar el tamaño (antes, si
+  // se pasaba del límite, quedaba sin cachear silenciosamente y este
+  // cálculo se repetía en cada visita al panel).
   const json = JSON.stringify(resultado);
-  if (json.length < 100000) {
-    cache.put(cacheKey, json, 1800);
-  }
+  cachePutGrande(cache, cacheKey, json, 1800);
 
   return resultado;
 }
@@ -1530,5 +1568,5 @@ function ubicarBloqueDia(hoja, diaNombre) {
 }
 
 function invalidarRutinaCache(id) {
-  CacheService.getScriptCache().remove("rutina_" + id);
+  cacheRemoveGrande(CacheService.getScriptCache(), "rutina_" + id);
 }

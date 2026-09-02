@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { GripVertical, X } from "lucide-react";
 
 import { SearchableSelect } from "@/components/admin/searchable-select";
 import { VideoPreview } from "@/components/video-preview";
@@ -39,12 +39,17 @@ export function ExerciseRowEditor({
   catalogo,
   onChange,
   onRemove,
+  onDragHandleStart,
 }: {
   exercise: Exercise;
   tipoPlan: string;
   catalogo: Catalogo;
   onChange: (next: Exercise) => void;
   onRemove: () => void;
+  // Si se pasa, se muestra un handle para arrastrar este ejercicio a otra
+  // serie (ver SerieEditor/DayEditor) — el grupo/serie ya no se elige a
+  // mano, sale de en qué serie quedó el ejercicio.
+  onDragHandleStart?: () => void;
 }) {
   const esPatrones = tipoPlan === "Patrones";
   const opcionesPatron = esPatrones ? catalogo.patrones : catalogo.musculos;
@@ -77,17 +82,17 @@ export function ExerciseRowEditor({
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card p-3">
       <div className="flex items-start gap-2">
-        <div className="w-16 shrink-0">
-          <label className="mb-1 block text-xs text-muted">Grupo</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            className={`${inputClass} text-center`}
-            value={exercise.agrupador}
-            onChange={(e) => set("agrupador", e.target.value)}
-            placeholder="—"
-          />
-        </div>
+        {onDragHandleStart ? (
+          <button
+            type="button"
+            draggable
+            onDragStart={onDragHandleStart}
+            className="mt-5 flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg text-muted hover:bg-white/5 hover:text-foreground active:cursor-grabbing"
+            aria-label="Arrastrar para mover a otra serie"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        ) : null}
 
         <div className="grid flex-1 grid-cols-2 gap-2">
           <div>
@@ -126,11 +131,6 @@ export function ExerciseRowEditor({
           <X className="h-4 w-4" />
         </button>
       </div>
-
-      <p className="text-xs text-muted">
-        Ejercicios con el mismo número de grupo (dentro del mismo día) se muestran combinados
-        en una misma serie.
-      </p>
 
       <div className="flex gap-3">
         <div className="flex-1 space-y-2">

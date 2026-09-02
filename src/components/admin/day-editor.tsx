@@ -35,12 +35,16 @@ export function DayEditor({
   onChangeSeries,
   tipoPlan,
   catalogo,
+  password,
+  onCatalogoActualizado,
 }: {
   diaNombre: string;
   series: Serie[];
   onChangeSeries: (series: Serie[]) => void;
   tipoPlan: string;
   catalogo: Catalogo;
+  password: string;
+  onCatalogoActualizado: (catalogo: Catalogo) => void;
 }) {
   // Qué ejercicio se está arrastrando ahora mismo (de qué serie, qué
   // posición) — se guarda al arrancar el drag y se consume al soltar.
@@ -142,6 +146,7 @@ export function DayEditor({
             numero={i + 1}
             tipoPlan={tipoPlan}
             catalogo={catalogo}
+            password={password}
             onDragStartEjercicio={(index) => setArrastrando({ serieId: serie.id, index })}
             onDropEnIndice={(index) => moverEjercicio(serie.id, index)}
             onDropAlFinal={() => moverEjercicio(serie.id, Number.MAX_SAFE_INTEGER)}
@@ -149,6 +154,7 @@ export function DayEditor({
             onRemoveEjercicio={(index) => quitarEjercicio(serie.id, index)}
             onAgregarEjercicio={() => agregarEjercicio(serie.id)}
             onRemoveSerie={() => quitarSerie(serie.id)}
+            onCatalogoActualizado={onCatalogoActualizado}
           />
         ))
       )}

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 function normalizar(texto: string): string {
   return texto
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 }
 
@@ -22,6 +22,7 @@ export function SearchableSelect({
   onChange,
   disabled,
   placeholder = "Buscar...",
+  allowCustom = false,
 }: {
   label: string;
   value: string;
@@ -29,6 +30,10 @@ export function SearchableSelect({
   onChange: (value: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  // Si no hay ninguna opción que coincida exacto con lo tipeado, deja
+  // usarlo tal cual (sin que esté en el catálogo) — para un nombre
+  // puntual que el entrenador no quiere agregar a la biblioteca.
+  allowCustom?: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -39,6 +44,11 @@ export function SearchableSelect({
   const filtradas = busqueda
     ? options.filter((o) => normalizar(o).includes(normalizar(busqueda)))
     : options;
+
+  const busquedaLimpia = busqueda.trim();
+  const hayCoincidenciaExacta = options.some((o) => normalizar(o) === normalizar(busquedaLimpia));
+  const mostrarOpcionCustom = allowCustom && busquedaLimpia !== "" && !hayCoincidenciaExacta;
+  const totalOpciones = filtradas.length + (mostrarOpcionCustom ? 1 : 0);
 
   useEffect(() => {
     function onClickFuera(e: MouseEvent) {
@@ -71,13 +81,17 @@ export function SearchableSelect({
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setResaltado((r) => Math.min(r + 1, filtradas.length - 1));
+      setResaltado((r) => Math.min(r + 1, totalOpciones - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setResaltado((r) => Math.max(r - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (filtradas[resaltado]) elegir(filtradas[resaltado]);
+      if (resaltado < filtradas.length) {
+        if (filtradas[resaltado]) elegir(filtradas[resaltado]);
+      } else if (mostrarOpcionCustom) {
+        elegir(busquedaLimpia);
+      }
     } else if (e.key === "Escape") {
       setAbierto(false);
       setBusqueda("");
@@ -116,7 +130,7 @@ export function SearchableSelect({
               </button>
             </li>
           ) : null}
-          {filtradas.length === 0 ? (
+          {filtradas.length === 0 && !mostrarOpcionCustom ? (
             <li className="px-3 py-1.5 text-muted">Sin resultados</li>
           ) : (
             filtradas.map((opcion, i) => (
@@ -136,6 +150,21 @@ export function SearchableSelect({
               </li>
             ))
           )}
+          {mostrarOpcionCustom ? (
+            <li>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => elegir(busquedaLimpia)}
+                className={cn(
+                  "w-full px-3 py-1.5 text-left text-primary hover:bg-white/5",
+                  resaltado === filtradas.length && "bg-white/10"
+                )}
+              >
+                Usar «{busquedaLimpia}» tal cual
+              </button>
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </div>

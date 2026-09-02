@@ -28,6 +28,7 @@ export function RoutineEditor({
   onAlumnoActualizado,
   onAlumnoEliminado,
   onAlumnoDuplicado,
+  onCatalogoActualizado,
 }: {
   password: string;
   alumno: AlumnoResumen;
@@ -36,6 +37,10 @@ export function RoutineEditor({
   onAlumnoActualizado: (alumno: AlumnoResumen) => void;
   onAlumnoEliminado: (id: string) => void;
   onAlumnoDuplicado: (alumno: AlumnoResumen) => void;
+  // Cuando se agrega un ejercicio nuevo a la biblioteca desde el editor
+  // (ver ExerciseRowEditor), para que quede disponible en el resto del
+  // panel sin recargar todo.
+  onCatalogoActualizado: (catalogo: Catalogo) => void;
 }) {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [error, setError] = useState("");
@@ -399,6 +404,8 @@ export function RoutineEditor({
                 onChangeSeries={(series) => handleChangeSeries(dia.nombre, series)}
                 tipoPlan={tipoPlan}
                 catalogo={catalogo}
+                password={password}
+                onCatalogoActualizado={onCatalogoActualizado}
               />
             ))}
         </div>

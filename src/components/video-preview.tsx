@@ -13,6 +13,7 @@ function getYouTubeId(url: string): string | null {
 export function VideoPreview({
   url,
   grow = false,
+  onRemove,
 }: {
   url: string;
   // Por defecto se estira con self-stretch (para cuando VideoPreview es
@@ -23,39 +24,59 @@ export function VideoPreview({
   // — ahí lo que hace falta es crecer en el eje principal, no estirarse
   // en el cruzado.
   grow?: boolean;
+  // Si se pasa, se muestra una "x" para quitar el video de este
+  // ejercicio puntual (panel del entrenador) — el alumno nunca la ve.
+  onRemove?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const videoId = getYouTubeId(url);
   const tamanoClase = grow ? "flex-1" : "self-stretch";
+  // El tamaño (min-h/w/grow-o-stretch) vive en este div contenedor —
+  // adentro, el thumbnail/link ocupa todo (h-full w-full) y la "x" de
+  // sacar el video es un hermano posicionado encima, no anidado dentro
+  // del botón que abre el video (no se puede anidar <button>).
+  const contenedorClase = `relative min-h-24 w-20 shrink-0 ${tamanoClase} sm:min-h-28 sm:w-24`;
+
+  function BotonQuitar() {
+    if (!onRemove) return null;
+    return (
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow"
+        aria-label="Quitar video de este ejercicio"
+        title="Quitar video"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    );
+  }
 
   if (!videoId) {
     return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`flex min-h-24 w-20 shrink-0 items-center justify-center ${tamanoClase} rounded-lg bg-primary text-primary-foreground sm:min-h-28 sm:w-24`}
-        aria-label="Ver video"
-      >
-        <Video className="h-5 w-5" strokeWidth={2.5} />
-      </a>
+      <div className={contenedorClase}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-full w-full items-center justify-center rounded-lg bg-primary text-primary-foreground"
+          aria-label="Ver video"
+        >
+          <Video className="h-5 w-5" strokeWidth={2.5} />
+        </a>
+        <BotonQuitar />
+      </div>
     );
   }
 
   const isShort = url.includes("/shorts/");
 
   return (
-    <>
+    <div className={contenedorClase}>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        // Altura: self-stretch o flex-1 según el contexto (ver arriba) en
-        // vez de una altura fija, para que ocupe todo el alto disponible
-        // junto a un bloque de contenido más alto (por ejemplo, con las
-        // notas del alumno debajo) en vez de quedar corto. min-h como
-        // piso por si el contenido de al lado es más bajo que un
-        // thumbnail.
-        className={`group relative block min-h-24 w-20 shrink-0 ${tamanoClase} overflow-hidden rounded-lg bg-black sm:min-h-28 sm:w-24`}
+        className="group relative block h-full w-full overflow-hidden rounded-lg bg-black"
         aria-label="Reproducir video"
       >
         <img
@@ -69,6 +90,8 @@ export function VideoPreview({
           </span>
         </span>
       </button>
+
+      <BotonQuitar />
 
       {open ? (
         <div
@@ -99,6 +122,6 @@ export function VideoPreview({
           </button>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

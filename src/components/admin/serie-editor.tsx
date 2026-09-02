@@ -17,6 +17,7 @@ export function SerieEditor({
   numero,
   tipoPlan,
   catalogo,
+  password,
   onDragStartEjercicio,
   onDropEnIndice,
   onDropAlFinal,
@@ -24,11 +25,13 @@ export function SerieEditor({
   onRemoveEjercicio,
   onAgregarEjercicio,
   onRemoveSerie,
+  onCatalogoActualizado,
 }: {
   serie: Serie;
   numero: number;
   tipoPlan: string;
   catalogo: Catalogo;
+  password: string;
   onDragStartEjercicio: (index: number) => void;
   onDropEnIndice: (index: number) => void;
   onDropAlFinal: () => void;
@@ -36,6 +39,7 @@ export function SerieEditor({
   onRemoveEjercicio: (index: number) => void;
   onAgregarEjercicio: () => void;
   onRemoveSerie: () => void;
+  onCatalogoActualizado: (catalogo: Catalogo) => void;
 }) {
   function eliminar() {
     if (
@@ -78,9 +82,11 @@ export function SerieEditor({
               exercise={ex}
               tipoPlan={tipoPlan}
               catalogo={catalogo}
+              password={password}
               onChange={(next) => onChangeEjercicio(i, next)}
               onRemove={() => onRemoveEjercicio(i)}
               onDragHandleStart={() => onDragStartEjercicio(i)}
+              onCatalogoActualizado={onCatalogoActualizado}
             />
           </div>
         ))}

@@ -121,6 +121,16 @@ export function guardarDia(
   return postAdmin<{ ok: true }>(password, "guardar_dia", { id, diaNombre, ejercicios });
 }
 
+// Agrega un ejercicio nuevo a EjerciciosConsolidado (la biblioteca
+// compartida), para poder elegirlo de nuevo más adelante — categoria/
+// musculo/link son opcionales, nombre es lo único obligatorio.
+export function agregarEjercicioCatalogo(
+  password: string,
+  datos: { categoria: string; musculo: string; nombre: string; link: string }
+) {
+  return postAdmin<{ ok: true }>(password, "agregar_ejercicio_catalogo", datos);
+}
+
 // Lectura pública (misma que usa la vista del alumno), reutilizada acá
 // para cargar los datos actuales de una rutina al editarla.
 export async function obtenerRutina(id: string): Promise<Routine> {

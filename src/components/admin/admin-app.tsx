@@ -150,6 +150,10 @@ export function AdminApp() {
             const s = estado;
             setEstado({ ...s, alumnos: ordenarAlumnos([...s.alumnos, nuevo]) });
           }}
+          onCatalogoActualizado={(catalogo) => {
+            const s = estado;
+            setEstado({ ...s, catalogo });
+          }}
         />
       )}
     </main>

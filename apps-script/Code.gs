@@ -1283,6 +1283,10 @@ function doPost(e) {
         manejarGuardarDia(ss, datos);
         return jsonResponse({ ok: true });
 
+      case "agregar_ejercicio_catalogo":
+        manejarAgregarEjercicioCatalogo(ss, datos);
+        return jsonResponse({ ok: true });
+
       case "guardar_nota_alumno":
         manejarGuardarNotaAlumno(ss, datos);
         return jsonResponse({ ok: true });
@@ -1451,6 +1455,31 @@ function manejarObtenerCatalogo(ss) {
   cachePutGrande(cache, cacheKey, json, 1800);
 
   return resultado;
+}
+
+// Agrega una fila nueva a EjerciciosConsolidado — un ejercicio que el
+// entrenador quiere poder elegir de nuevo más adelante, sin tener que
+// cargarlo a mano en la planilla. Solo el nombre es obligatorio; si
+// falta categoría o músculo, el ejercicio queda igual, solo que no
+// aparece bajo ese filtro (mismo comportamiento que ya tolera
+// manejarObtenerCatalogo para filas existentes con algún campo vacío).
+function manejarAgregarEjercicioCatalogo(ss, datos) {
+
+  const categoria = String(datos.categoria || "").trim();
+  const musculo = String(datos.musculo || "").trim();
+  const nombre = String(datos.nombre || "").trim();
+  const link = String(datos.link || "").trim();
+
+  if (!nombre) throw new Error("Falta el nombre del ejercicio.");
+
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+  if (!base) throw new Error('No existe la hoja "EjerciciosConsolidado".');
+
+  // columnas: 0=#, 1=Categoría, 2=Músculo, 3=Ejercicio, 4=Link1 — el "#"
+  // se deja en blanco, no lo usa nada de la app.
+  base.appendRow(["", categoria, musculo, nombre, link]);
+
+  cacheRemoveGrande(CacheService.getScriptCache(), "catalogo_v1");
 }
 
 function manejarCrearAlumno(ss, datos) {

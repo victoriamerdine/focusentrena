@@ -54,6 +54,9 @@ export function RoutineEditor({
   const [nombre, setNombre] = useState(alumno.alumno);
   const [tipoPlan, setTipoPlan] = useState(alumno.tipoPlan || "Musculo");
   const [fechaCreacion, setFechaCreacion] = useState(alumno.fechaCreacion || "");
+  // Nombre/categoría/fecha sin guardar — los botones "Guardar cambios" (de
+  // arriba y de abajo) también guardan esto, no solo los días.
+  const [datosModificados, setDatosModificados] = useState(false);
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [mensajeDatos, setMensajeDatos] = useState("");
   const [eliminando, setEliminando] = useState(false);
@@ -86,6 +89,7 @@ export function RoutineEditor({
     try {
       await actualizarAlumno(password, alumno.id, { nombreAlumno: nombre, tipoPlan, fechaCreacion });
       onAlumnoActualizado({ ...alumno, alumno: nombre, tipoPlan, fechaCreacion });
+      setDatosModificados(false);
       setMensajeDatos("Guardado.");
     } catch (err) {
       setMensajeDatos(err instanceof Error ? err.message : "No se pudo guardar.");
@@ -126,7 +130,8 @@ export function RoutineEditor({
   }
 
   function volver() {
-    if (diasModificados.size > 0 && !confirm("Tenés cambios sin guardar. ¿Salir igual?")) return;
+    const hayCambios = diasModificados.size > 0 || datosModificados;
+    if (hayCambios && !confirm("Tenés cambios sin guardar. ¿Salir igual?")) return;
     onVolver();
   }
 
@@ -151,17 +156,27 @@ export function RoutineEditor({
     setMensajeGuardado("");
   }
 
-  // Guarda de una todos los días que se tocaron desde la última vez que
-  // se guardó (o desde que se cargó la rutina). Si alguno falla, los
-  // demás igual se guardan y ese queda marcado como modificado para
-  // reintentarlo con un click más.
+  // Guarda de una los datos del alumno (si cambiaron) y todos los días
+  // que se tocaron desde la última vez que se guardó (o desde que se
+  // cargó la rutina). Si algo falla, lo demás igual se guarda y eso
+  // queda marcado como modificado para reintentarlo con un click más.
   async function guardarTodo() {
     const dias = [...diasModificados];
-    if (dias.length === 0) return;
+    if (dias.length === 0 && !datosModificados) return;
 
     setGuardandoTodo(true);
     setMensajeGuardado("");
     const fallidos: string[] = [];
+
+    if (datosModificados) {
+      try {
+        await actualizarAlumno(password, alumno.id, { nombreAlumno: nombre, tipoPlan, fechaCreacion });
+        onAlumnoActualizado({ ...alumno, alumno: nombre, tipoPlan, fechaCreacion });
+        setDatosModificados(false);
+      } catch {
+        fallidos.push("los datos del alumno");
+      }
+    }
 
     for (const dia of dias) {
       try {
@@ -189,19 +204,20 @@ export function RoutineEditor({
   // se llama inline, así React la trata como el mismo JSX de siempre en
   // vez de un tipo de componente nuevo en cada render.
   function renderBotonGuardarTodo() {
+    const totalCambios = diasModificados.size + (datosModificados ? 1 : 0);
     return (
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={guardarTodo}
-          disabled={guardandoTodo || diasModificados.size === 0}
+          disabled={guardandoTodo || totalCambios === 0}
           className="flex items-center gap-2 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
         >
           <Save className="h-4 w-4" />
           {guardandoTodo
             ? "Guardando..."
-            : diasModificados.size > 0
-              ? `Guardar cambios (${diasModificados.size})`
+            : totalCambios > 0
+              ? `Guardar cambios (${totalCambios})`
               : "Sin cambios"}
         </button>
         {mensajeGuardado ? (
@@ -245,12 +261,18 @@ export function RoutineEditor({
           <input
             type="text"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => {
+              setNombre(e.target.value);
+              setDatosModificados(true);
+            }}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           />
           <select
             value={tipoPlan}
-            onChange={(e) => setTipoPlan(e.target.value)}
+            onChange={(e) => {
+              setTipoPlan(e.target.value);
+              setDatosModificados(true);
+            }}
             className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
           >
             <option value="Musculo">Musculo</option>
@@ -274,7 +296,10 @@ export function RoutineEditor({
             <input
               type="date"
               value={fechaCreacion}
-              onChange={(e) => setFechaCreacion(e.target.value)}
+              onChange={(e) => {
+                setFechaCreacion(e.target.value);
+                setDatosModificados(true);
+              }}
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
             />
             {fechaCreacion ? <BadgeRenovacion fechaCreacion={fechaCreacion} /> : null}

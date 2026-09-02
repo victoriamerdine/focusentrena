@@ -401,26 +401,39 @@ function crearHojaRutina(ss, nombreAlumno, tipoPlan) {
     throw new Error('No existe la hoja "Template Rutina"');
   }
 
+  const resultado = crearHojaRutinaDesde(ss, template, nombreAlumno);
+
+  if (tipoPlan) {
+    resultado.hoja.getRange("B4").setValue(tipoPlan);
+  }
+
+  return resultado;
+}
+
+// Clona cualquier hoja de rutina (el template, o la de un alumno existente
+// — ver duplicarHojaRutina) hacia una nueva con nombre/id propios. copyTo()
+// trae todo el contenido, formato condicional y validaciones de datos tal
+// cual estén en la hoja de origen.
+function crearHojaRutinaDesde(ss, hojaOrigen, nombreAlumno) {
+
   const nombreHoja = `${nombreAlumno} - Rutina`;
 
   if (ss.getSheetByName(nombreHoja)) {
     throw new Error("Esa rutina ya existe.");
   }
 
-  const nuevaHoja = template.copyTo(ss);
+  const nuevaHoja = hojaOrigen.copyTo(ss);
 
   nuevaHoja.setName(nombreHoja);
 
   nuevaHoja.getRange("B2").setValue(nombreAlumno);
 
-  if (tipoPlan) {
-    nuevaHoja.getRange("B4").setValue(tipoPlan);
-  }
-
   const id = generarIdUnico(ss, nombreAlumno);
   nuevaHoja.getRange("E2").setValue(id);
 
-  // Fecha de creación, para saber cuándo toca renovar el plan.
+  // Fecha de creación, para saber cuándo toca renovar el plan — arranca de
+  // cero incluso al duplicar (es un plan nuevo, con su propio ciclo de
+  // renovación de 30 días).
   nuevaHoja.getRange("E4").setValue(new Date());
 
   invalidarIndiceAlumnos();
@@ -428,6 +441,51 @@ function crearHojaRutina(ss, nombreAlumno, tipoPlan) {
   actualizarDashboard();
 
   return { hoja: nuevaHoja, id: id, nombreHoja: nombreHoja };
+}
+
+// Duplica el plan de un alumno existente hacia uno nuevo, con el nombre
+// que elija el entrenador — mismos días/ejercicios/agrupadores, pero sin
+// arrastrar la carga/notas personales del alumno original (no tienen
+// sentido en un plan nuevo, sea para otro alumno o para renovarle a este).
+function duplicarHojaRutina(ss, idOrigen, nombreNuevo) {
+
+  const hojaOrigen = buscarAlumno(idOrigen, ss);
+  if (!hojaOrigen) {
+    throw new Error("No se encontró el plan a duplicar.");
+  }
+
+  const resultado = crearHojaRutinaDesde(ss, hojaOrigen, nombreNuevo);
+  limpiarNotasAlumno(resultado.hoja);
+
+  return resultado;
+}
+
+// Vacía las columnas J (Nota Alumno) y K (Carga) solo en las filas de
+// datos de cada día — deja los encabezados ("Nota Alumno"/"Carga", justo
+// debajo de la etiqueta de cada día) intactos. Misma detección de bloques
+// de día que ubicarBloqueDia(), pero para todos los días de una hoja de
+// una sola pasada en vez de uno a la vez.
+function limpiarNotasAlumno(hoja) {
+
+  const lastRow = hoja.getLastRow();
+  if (lastRow < 1) return;
+
+  const valores = hoja.getRange(1, 1, lastRow, 2).getValues();
+  const filasEtiqueta = [];
+
+  for (let r = 0; r < valores.length; r++) {
+    const colA = String(valores[r][0] || "").trim();
+    const colB = String(valores[r][1] || "").trim();
+    if (DAY_REGEX.test(colA) || DAY_REGEX.test(colB)) filasEtiqueta.push(r + 1);
+  }
+
+  filasEtiqueta.forEach((filaEtiqueta, i) => {
+    const filaDatosInicio = filaEtiqueta + 2;
+    const filaFin = i === filasEtiqueta.length - 1 ? lastRow : filasEtiqueta[i + 1] - 1;
+    if (filaFin >= filaDatosInicio) {
+      hoja.getRange(filaDatosInicio, 10, filaFin - filaDatosInicio + 1, 2).clearContent();
+    }
+  });
 }
 
 function generarIdUnico(ss, nombre) {
@@ -1083,6 +1141,9 @@ function doPost(e) {
       case "crear_alumno":
         return jsonResponse({ ok: true, alumno: manejarCrearAlumno(ss, datos) });
 
+      case "duplicar_alumno":
+        return jsonResponse({ ok: true, alumno: manejarDuplicarAlumno(ss, datos) });
+
       case "actualizar_alumno":
         manejarActualizarAlumno(ss, datos);
         return jsonResponse({ ok: true });
@@ -1267,6 +1328,26 @@ function manejarCrearAlumno(ss, datos) {
   const resultado = crearHojaRutina(ss, nombreAlumno, tipoPlan);
 
   return { id: resultado.id, alumno: nombreAlumno, tipoPlan: tipoPlan, hoja: resultado.nombreHoja };
+}
+
+function manejarDuplicarAlumno(ss, datos) {
+
+  const idOrigen = String(datos.id || "").trim();
+  const nombreNuevo = String(datos.nombreNuevo || "").trim();
+
+  if (!idOrigen) throw new Error("Falta el plan a duplicar.");
+  if (!nombreNuevo) throw new Error("Falta el nombre para la copia.");
+
+  const resultado = duplicarHojaRutina(ss, idOrigen, nombreNuevo);
+  const encabezado = leerEncabezadoHoja(resultado.hoja);
+
+  return {
+    id: resultado.id,
+    alumno: nombreNuevo,
+    tipoPlan: encabezado.tipoPlan,
+    hoja: resultado.nombreHoja,
+    fechaCreacion: encabezado.fechaCreacion,
+  };
 }
 
 function manejarActualizarAlumno(ss, datos) {

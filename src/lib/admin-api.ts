@@ -102,6 +102,16 @@ export function eliminarAlumno(password: string, id: string) {
   return postAdmin<{ ok: true }>(password, "eliminar_alumno", { id });
 }
 
+// Duplica el plan de un alumno hacia uno nuevo con el nombre que elija el
+// entrenador — mismos días/ejercicios, pero sin la carga/notas personales
+// del original (no tienen sentido en un plan nuevo).
+export function duplicarAlumno(password: string, id: string, nombreNuevo: string) {
+  return postAdmin<{ ok: true; alumno: AlumnoResumen }>(password, "duplicar_alumno", {
+    id,
+    nombreNuevo,
+  });
+}
+
 export function guardarDia(
   password: string,
   id: string,

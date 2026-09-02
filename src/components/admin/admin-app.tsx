@@ -137,6 +137,10 @@ export function AdminApp() {
               catalogo: s.catalogo,
             });
           }}
+          onAlumnoDuplicado={(nuevo) => {
+            const s = estado;
+            setEstado({ ...s, alumnos: ordenarAlumnos([...s.alumnos, nuevo]) });
+          }}
         />
       )}
     </main>

@@ -1,11 +1,11 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Files, Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
 import { CopyLinkButton } from "@/components/admin/copy-link-button";
-import { crearAlumno, eliminarAlumno } from "@/lib/admin-api";
+import { crearAlumno, duplicarAlumno, eliminarAlumno } from "@/lib/admin-api";
 import { linkAlumno } from "@/lib/config";
 import { formatearFecha } from "@/lib/format-fecha";
 import type { AlumnoResumen } from "@/lib/admin-types";
@@ -28,6 +28,7 @@ export function AlumnoDashboard({
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState("");
   const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [duplicandoId, setDuplicandoId] = useState<string | null>(null);
 
   async function crear(e: FormEvent) {
     e.preventDefault();
@@ -42,6 +43,23 @@ export function AlumnoDashboard({
       setErrorCrear(err instanceof Error ? err.message : "No se pudo crear.");
     } finally {
       setCreando(false);
+    }
+  }
+
+  async function duplicar(alumno: AlumnoResumen) {
+    const nombreNuevo = window.prompt(
+      `Nombre para la copia de "${alumno.alumno}":`,
+      `${alumno.alumno} (copia)`
+    );
+    if (!nombreNuevo || !nombreNuevo.trim()) return;
+    setDuplicandoId(alumno.id);
+    try {
+      const { alumno: nuevo } = await duplicarAlumno(password, alumno.id, nombreNuevo.trim());
+      onAlumnoCreado(nuevo);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo duplicar.");
+    } finally {
+      setDuplicandoId(null);
     }
   }
 
@@ -110,6 +128,16 @@ export function AlumnoDashboard({
                 </p>
               </button>
               <CopyLinkButton url={linkAlumno(a.id)} label="Link" />
+              <button
+                type="button"
+                onClick={() => duplicar(a)}
+                disabled={duplicandoId === a.id}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-white/5 hover:text-primary disabled:opacity-50"
+                aria-label={`Duplicar rutina de ${a.alumno}`}
+                title="Duplicar plan"
+              >
+                <Files className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => eliminar(a.id, a.alumno)}

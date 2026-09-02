@@ -1,13 +1,19 @@
 "use client";
 
-import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Files, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { BadgeRenovacion } from "@/components/admin/badge-renovacion";
 import { CopyLinkButton } from "@/components/admin/copy-link-button";
 import { DayEditor } from "@/components/admin/day-editor";
 import { WeekSummary } from "@/components/admin/week-summary";
-import { actualizarAlumno, eliminarAlumno, guardarDia, obtenerRutina } from "@/lib/admin-api";
+import {
+  actualizarAlumno,
+  duplicarAlumno,
+  eliminarAlumno,
+  guardarDia,
+  obtenerRutina,
+} from "@/lib/admin-api";
 import { linkAlumno } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
@@ -20,6 +26,7 @@ export function RoutineEditor({
   onVolver,
   onAlumnoActualizado,
   onAlumnoEliminado,
+  onAlumnoDuplicado,
 }: {
   password: string;
   alumno: AlumnoResumen;
@@ -27,6 +34,7 @@ export function RoutineEditor({
   onVolver: () => void;
   onAlumnoActualizado: (alumno: AlumnoResumen) => void;
   onAlumnoEliminado: (id: string) => void;
+  onAlumnoDuplicado: (alumno: AlumnoResumen) => void;
 }) {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [error, setError] = useState("");
@@ -40,6 +48,8 @@ export function RoutineEditor({
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [mensajeDatos, setMensajeDatos] = useState("");
   const [eliminando, setEliminando] = useState(false);
+  const [duplicando, setDuplicando] = useState(false);
+  const [mensajeDuplicar, setMensajeDuplicar] = useState("");
 
   useEffect(() => {
     obtenerRutina(alumno.id)
@@ -66,6 +76,25 @@ export function RoutineEditor({
       setMensajeDatos(err instanceof Error ? err.message : "No se pudo guardar.");
     } finally {
       setGuardandoDatos(false);
+    }
+  }
+
+  async function duplicar() {
+    const nombreNuevo = window.prompt(
+      `Nombre para la copia de "${alumno.alumno}":`,
+      `${alumno.alumno} (copia)`
+    );
+    if (!nombreNuevo || !nombreNuevo.trim()) return;
+    setDuplicando(true);
+    setMensajeDuplicar("");
+    try {
+      const { alumno: nuevo } = await duplicarAlumno(password, alumno.id, nombreNuevo.trim());
+      onAlumnoDuplicado(nuevo);
+      setMensajeDuplicar(`Se creó "${nuevo.alumno}".`);
+    } catch (err) {
+      setMensajeDuplicar(err instanceof Error ? err.message : "No se pudo duplicar.");
+    } finally {
+      setDuplicando(false);
     }
   }
 
@@ -177,7 +206,16 @@ export function RoutineEditor({
           <CopyLinkButton url={linkAlumno(alumno.id)} />
         </div>
 
-        <div className="mt-4 border-t border-border pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={duplicar}
+            disabled={duplicando}
+            className="flex items-center gap-1.5 text-sm text-muted hover:text-primary disabled:opacity-50"
+          >
+            <Files className="h-4 w-4" />
+            {duplicando ? "Duplicando..." : "Duplicar plan"}
+          </button>
           <button
             type="button"
             onClick={eliminarAlumnoActual}
@@ -188,6 +226,7 @@ export function RoutineEditor({
             {eliminando ? "Eliminando..." : "Eliminar alumno"}
           </button>
         </div>
+        {mensajeDuplicar ? <p className="mt-2 text-sm text-muted">{mensajeDuplicar}</p> : null}
       </div>
 
       {error ? <p className="text-sm text-red-400">{error}</p> : null}

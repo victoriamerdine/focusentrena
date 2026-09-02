@@ -141,6 +141,11 @@ export function RoutineEditor({
 
   return (
     <div className="space-y-6">
+      {/* El editor puede ser bastante más ancho que este bloque (para que
+          entren 2 días lado a lado sin quedar recortados) — los datos del
+          alumno y los tabs de día se quedan angostos, centrados, para no
+          verse desparramados cuando hay 1 solo día abierto. */}
+      <div className="mx-auto w-full max-w-2xl space-y-6">
       <button
         type="button"
         onClick={onVolver}
@@ -258,21 +263,24 @@ export function RoutineEditor({
             ))}
             <span className="text-xs text-muted">Podés tener 2 días abiertos a la vez</span>
           </div>
+        </div>
+      ) : null}
+      </div>
 
-          <div className={cn("grid gap-4", diasActivos.length > 1 && "lg:grid-cols-2")}>
-            {routine.dias
-              .filter((dia) => diasActivos.includes(dia.nombre))
-              .map((dia) => (
-                <DayEditor
-                  key={dia.nombre}
-                  diaNombre={dia.nombre}
-                  ejerciciosIniciales={dia.ejercicios}
-                  tipoPlan={tipoPlan}
-                  catalogo={catalogo}
-                  onGuardar={handleGuardarDia}
-                />
-              ))}
-          </div>
+      {routine ? (
+        <div className={cn("grid gap-4", diasActivos.length > 1 && "lg:grid-cols-2")}>
+          {routine.dias
+            .filter((dia) => diasActivos.includes(dia.nombre))
+            .map((dia) => (
+              <DayEditor
+                key={dia.nombre}
+                diaNombre={dia.nombre}
+                ejerciciosIniciales={dia.ejercicios}
+                tipoPlan={tipoPlan}
+                catalogo={catalogo}
+                onGuardar={handleGuardarDia}
+              />
+            ))}
         </div>
       ) : null}
     </div>

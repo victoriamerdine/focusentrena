@@ -8,6 +8,7 @@ import { LoginScreen } from "@/components/admin/login-screen";
 import { RoutineEditor } from "@/components/admin/routine-editor";
 import { AdminApiError, cargarPanel } from "@/lib/admin-api";
 import { clearStoredPassword, getStoredPassword, setStoredPassword } from "@/lib/admin-auth";
+import { cn } from "@/lib/utils";
 import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
 
 type Estado =
@@ -76,7 +77,15 @@ export function AdminApp() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 pb-16 pt-10 sm:px-6">
+    <main
+      className={cn(
+        "mx-auto flex min-h-screen flex-col gap-6 px-4 pb-16 pt-10 sm:px-6 transition-[max-width]",
+        // El editor necesita bastante más ancho que el dashboard para que
+        // los 2 días abiertos a la vez entren cómodos (Patrón/Ejercicio
+        // quedaban recortados a max-w-2xl).
+        estado.vista === "editor" ? "max-w-6xl" : "max-w-2xl"
+      )}
+    >
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-primary">Focus Entrena</p>

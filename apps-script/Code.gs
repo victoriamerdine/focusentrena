@@ -1284,7 +1284,17 @@ function doPost(e) {
         return jsonResponse({ ok: true });
 
       case "agregar_ejercicio_catalogo":
-        manejarAgregarEjercicioCatalogo(ss, datos);
+        return jsonResponse({ ok: true, ejercicio: manejarAgregarEjercicioCatalogo(ss, datos) });
+
+      case "listar_ejercicios_catalogo":
+        return jsonResponse({ ok: true, ejercicios: manejarListarEjerciciosCatalogo(ss) });
+
+      case "editar_ejercicio_catalogo":
+        manejarEditarEjercicioCatalogo(ss, datos);
+        return jsonResponse({ ok: true });
+
+      case "eliminar_ejercicio_catalogo":
+        manejarEliminarEjercicioCatalogo(ss, datos);
         return jsonResponse({ ok: true });
 
       case "guardar_nota_alumno":
@@ -1457,12 +1467,24 @@ function manejarObtenerCatalogo(ss) {
   return resultado;
 }
 
+// El catálogo agregado (manejarObtenerCatalogo) y la lista plana fila por
+// fila (manejarListarEjerciciosCatalogo) son dos vistas de los mismos
+// datos — cualquier cambio a EjerciciosConsolidado invalida los dos
+// cachés juntos.
+function invalidarCatalogo() {
+  const cache = CacheService.getScriptCache();
+  cacheRemoveGrande(cache, "catalogo_v1");
+  cacheRemoveGrande(cache, "catalogo_lista_v1");
+}
+
 // Agrega una fila nueva a EjerciciosConsolidado — un ejercicio que el
 // entrenador quiere poder elegir de nuevo más adelante, sin tener que
 // cargarlo a mano en la planilla. Solo el nombre es obligatorio; si
 // falta categoría o músculo, el ejercicio queda igual, solo que no
 // aparece bajo ese filtro (mismo comportamiento que ya tolera
 // manejarObtenerCatalogo para filas existentes con algún campo vacío).
+// Devuelve la fila donde quedó, para poder editarla/borrarla después sin
+// tener que recargar toda la lista.
 function manejarAgregarEjercicioCatalogo(ss, datos) {
 
   const categoria = String(datos.categoria || "").trim();
@@ -1479,7 +1501,98 @@ function manejarAgregarEjercicioCatalogo(ss, datos) {
   // se deja en blanco, no lo usa nada de la app.
   base.appendRow(["", categoria, musculo, nombre, link]);
 
-  cacheRemoveGrande(CacheService.getScriptCache(), "catalogo_v1");
+  invalidarCatalogo();
+
+  return { fila: base.getLastRow() };
+}
+
+// Lista fila por fila (no agregado como manejarObtenerCatalogo) toda la
+// biblioteca de ejercicios, para la pantalla de administrarla — cada
+// ejercicio lleva su número de fila real, que sirve de identificador
+// estable para editarlo o borrarlo puntualmente.
+function manejarListarEjerciciosCatalogo(ss) {
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = "catalogo_lista_v1";
+  const cacheado = cacheGetGrande(cache, cacheKey);
+
+  if (cacheado) {
+    try {
+      return JSON.parse(cacheado);
+    } catch (e) {
+      // sigue de largo y la reconstruye
+    }
+  }
+
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+  if (!base) return [];
+
+  const datos = base.getDataRange().getValues();
+  // columnas: 0=#, 1=Categoría, 2=Músculo, 3=Ejercicio, 4=Link1
+  const ENCABEZADOS_IGNORADOS = ["categoría", "categoria", "músculo", "musculo"];
+
+  const resultado = [];
+  for (let i = 0; i < datos.length; i++) {
+
+    const fila = datos[i];
+    let categoria = String(fila[1] || "").trim();
+    let musculo = String(fila[2] || "").trim();
+    const nombre = String(fila[3] || "").trim();
+    const link = String(fila[4] || "").trim();
+
+    if (ENCABEZADOS_IGNORADOS.indexOf(categoria.toLowerCase()) !== -1) categoria = "";
+    if (ENCABEZADOS_IGNORADOS.indexOf(musculo.toLowerCase()) !== -1) musculo = "";
+
+    if (!nombre) continue;
+
+    resultado.push({ fila: i + 1, categoria: categoria, musculo: musculo, nombre: nombre, link: link });
+  }
+
+  const json = JSON.stringify(resultado);
+  cachePutGrande(cache, cacheKey, json, 1800);
+
+  return resultado;
+}
+
+// Edita una fila puntual de EjerciciosConsolidado (por su número de fila
+// real, el mismo que manda manejarListarEjerciciosCatalogo).
+function manejarEditarEjercicioCatalogo(ss, datos) {
+
+  const fila = Number(datos.fila);
+  if (!Number.isInteger(fila) || fila < 1) throw new Error("Ejercicio inválido.");
+
+  const categoria = String(datos.categoria || "").trim();
+  const musculo = String(datos.musculo || "").trim();
+  const nombre = String(datos.nombre || "").trim();
+  const link = String(datos.link || "").trim();
+
+  if (!nombre) throw new Error("Falta el nombre del ejercicio.");
+
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+  if (!base) throw new Error('No existe la hoja "EjerciciosConsolidado".');
+  if (fila > base.getLastRow()) throw new Error("Ese ejercicio ya no existe.");
+
+  base.getRange(fila, 2, 1, 4).setValues([[categoria, musculo, nombre, link]]);
+
+  invalidarCatalogo();
+}
+
+// Borra una fila puntual de EjerciciosConsolidado. Borra la fila entera
+// (no solo el contenido) — el frontend siempre vuelve a pedir la lista
+// completa después de un cambio, así que no queda ninguna otra fila con
+// un número de fila viejo dando vueltas en esta misma sesión.
+function manejarEliminarEjercicioCatalogo(ss, datos) {
+
+  const fila = Number(datos.fila);
+  if (!Number.isInteger(fila) || fila < 1) throw new Error("Ejercicio inválido.");
+
+  const base = ss.getSheetByName("EjerciciosConsolidado");
+  if (!base) throw new Error('No existe la hoja "EjerciciosConsolidado".');
+  if (fila > base.getLastRow()) throw new Error("Ese ejercicio ya no existe.");
+
+  base.deleteRow(fila);
+
+  invalidarCatalogo();
 }
 
 function manejarCrearAlumno(ss, datos) {

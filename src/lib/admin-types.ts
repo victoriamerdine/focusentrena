@@ -14,3 +14,15 @@ export interface Catalogo {
   ejerciciosPorMusculo: Record<string, string[]>;
   videosPorEjercicio: Record<string, string>;
 }
+
+// Una fila de EjerciciosConsolidado tal cual, para la pantalla de
+// administrar la biblioteca (a diferencia de Catalogo, que viene
+// agregado por patrón/músculo). "fila" es el número de fila real en la
+// hoja — identificador estable para editar/borrar ese ejercicio puntual.
+export interface EjercicioCatalogo {
+  fila: number;
+  categoria: string;
+  musculo: string;
+  nombre: string;
+  link: string;
+}

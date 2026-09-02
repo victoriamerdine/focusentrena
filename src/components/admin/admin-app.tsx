@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AlumnoDashboard } from "@/components/admin/alumno-dashboard";
+import { BibliotecaEjercicios } from "@/components/admin/biblioteca-ejercicios";
 import { LoginScreen } from "@/components/admin/login-screen";
 import { RoutineEditor } from "@/components/admin/routine-editor";
 import { AdminApiError, cargarPanel } from "@/lib/admin-api";
@@ -15,6 +16,7 @@ type Estado =
   | { vista: "cargando" }
   | { vista: "login"; error: string }
   | { vista: "dashboard"; password: string; alumnos: AlumnoResumen[]; catalogo: Catalogo }
+  | { vista: "biblioteca"; password: string; alumnos: AlumnoResumen[]; catalogo: Catalogo }
   | {
       vista: "editor";
       password: string;
@@ -80,8 +82,8 @@ export function AdminApp() {
     <main
       className={cn(
         "mx-auto flex min-h-screen flex-col gap-6 px-4 pb-16 pt-10 sm:px-6 transition-[max-width]",
-        // El editor necesita bastante más ancho que el dashboard para que
-        // los 2 días abiertos a la vez entren cómodos (Patrón/Ejercicio
+        // El editor necesita bastante más ancho que el resto para que los
+        // 2 días abiertos a la vez entren cómodos (Patrón/Ejercicio
         // quedaban recortados a max-w-2xl).
         estado.vista === "editor" ? "max-w-6xl" : "max-w-2xl"
       )}
@@ -91,14 +93,28 @@ export function AdminApp() {
           <p className="text-xs font-bold uppercase tracking-widest text-primary">Focus Entrena</p>
           <h1 className="font-display text-2xl tracking-tight">Panel del entrenador</h1>
         </div>
-        <button
-          type="button"
-          onClick={salir}
-          className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground"
-        >
-          <LogOut className="h-4 w-4" />
-          Salir
-        </button>
+        <div className="flex items-center gap-4">
+          {estado.vista === "dashboard" ? (
+            <button
+              type="button"
+              onClick={() => {
+                const s = estado;
+                setEstado({ ...s, vista: "biblioteca" });
+              }}
+              className="text-sm text-muted hover:text-foreground"
+            >
+              Biblioteca de ejercicios
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={salir}
+            className="flex items-center gap-1.5 text-sm text-muted hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" />
+            Salir
+          </button>
+        </div>
       </header>
 
       {estado.vista === "dashboard" ? (
@@ -116,6 +132,19 @@ export function AdminApp() {
           onEditar={(alumno) => {
             const s = estado;
             setEstado({ ...s, vista: "editor", alumno });
+          }}
+        />
+      ) : estado.vista === "biblioteca" ? (
+        <BibliotecaEjercicios
+          password={estado.password}
+          catalogo={estado.catalogo}
+          onVolver={() => {
+            const s = estado;
+            setEstado({ ...s, vista: "dashboard" });
+          }}
+          onCatalogoActualizado={(catalogo) => {
+            const s = estado;
+            setEstado({ ...s, catalogo });
           }}
         />
       ) : (

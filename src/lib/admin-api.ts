@@ -1,5 +1,5 @@
 import { APPS_SCRIPT_URL } from "@/lib/config";
-import type { AlumnoResumen, Catalogo } from "@/lib/admin-types";
+import type { AlumnoResumen, Catalogo, EjercicioCatalogo } from "@/lib/admin-types";
 import type { Exercise, Routine } from "@/lib/types";
 
 export class AdminApiError extends Error {
@@ -123,12 +123,38 @@ export function guardarDia(
 
 // Agrega un ejercicio nuevo a EjerciciosConsolidado (la biblioteca
 // compartida), para poder elegirlo de nuevo más adelante — categoria/
-// musculo/link son opcionales, nombre es lo único obligatorio.
+// musculo/link son opcionales, nombre es lo único obligatorio. Devuelve
+// la fila real donde quedó, para poder editarlo/borrarlo después.
 export function agregarEjercicioCatalogo(
   password: string,
   datos: { categoria: string; musculo: string; nombre: string; link: string }
 ) {
-  return postAdmin<{ ok: true }>(password, "agregar_ejercicio_catalogo", datos);
+  return postAdmin<{ ok: true; ejercicio: { fila: number } }>(
+    password,
+    "agregar_ejercicio_catalogo",
+    datos
+  );
+}
+
+// Pantalla de administrar la biblioteca de ejercicios: listado completo
+// (no agregado por patrón/músculo como Catalogo), editar y borrar un
+// ejercicio puntual por su número de fila.
+export function listarEjerciciosCatalogo(password: string) {
+  return postAdmin<{ ok: true; ejercicios: EjercicioCatalogo[] }>(
+    password,
+    "listar_ejercicios_catalogo"
+  );
+}
+
+export function editarEjercicioCatalogo(
+  password: string,
+  datos: { fila: number; categoria: string; musculo: string; nombre: string; link: string }
+) {
+  return postAdmin<{ ok: true }>(password, "editar_ejercicio_catalogo", datos);
+}
+
+export function eliminarEjercicioCatalogo(password: string, fila: number) {
+  return postAdmin<{ ok: true }>(password, "eliminar_ejercicio_catalogo", { fila });
 }
 
 // Lectura pública (misma que usa la vista del alumno), reutilizada acá

@@ -9,6 +9,7 @@ const inputClass =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-primary focus:outline-none";
 
 export interface EjercicioNuevo {
+  fila: number;
   categoria: string;
   musculo: string;
   nombre: string;
@@ -46,15 +47,15 @@ export function AgregarEjercicioModal({
     }
     setGuardando(true);
     setError("");
-    const nuevo: EjercicioNuevo = {
+    const datos = {
       categoria: categoria.trim(),
       musculo: musculo.trim(),
       nombre: nombreLimpio,
       link: link.trim(),
     };
     try {
-      await agregarEjercicioCatalogo(password, nuevo);
-      onCreado(nuevo);
+      const { ejercicio } = await agregarEjercicioCatalogo(password, datos);
+      onCreado({ ...datos, fila: ejercicio.fila });
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar.");
       setGuardando(false);

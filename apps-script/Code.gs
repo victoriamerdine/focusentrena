@@ -368,6 +368,21 @@ function limpiarIdsDeHojasIgnoradas() {
   Logger.log(`Listo. Se vació E2 en ${hojasLimpiadas} hoja(s) ignorada(s).`);
 }
 
+// Diagnóstico puntual: lista el nombre de cada hoja de plan y qué hay en
+// su E2 (el id que usa el link del alumno) — para investigar un id que
+// dejó de funcionar (por ejemplo, si dos hojas terminaron con el mismo
+// id y manejarListarAlumnos() le generó uno nuevo a una de las dos).
+// Correr una sola vez desde el editor (▶ Run) y mirar el resultado en
+// Ver > Registros de ejecución. No hace falta un deployment nuevo para
+// esto — cualquier función se puede correr directo desde el editor.
+function listarIdsDeHojas() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const filas = ss.getSheets()
+    .filter(esHojaDePlan)
+    .map(h => `${h.getName()}  ->  E2 = "${h.getRange("E2").getValue()}"`);
+  Logger.log(filas.join("\n"));
+}
+
 // Configura el formato condicional de "Template Rutina" y de todas las
 // hojas de alumnos existentes: pinta cada fila según el número que tenga
 // en la columna Agrupador (I), con los mismos colores exactos que usa la

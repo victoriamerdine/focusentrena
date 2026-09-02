@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 
 import { SearchableSelect } from "@/components/admin/searchable-select";
+import { VideoPreview } from "@/components/video-preview";
 import type { Catalogo } from "@/lib/admin-types";
 import { normalizarNombreEjercicio } from "@/lib/normalizar-ejercicio";
 import type { Exercise } from "@/lib/types";
@@ -147,7 +148,21 @@ export function ExerciseRowEditor({
       </div>
 
       <Campo label="Notas" value={exercise.notas} onChange={(v) => set("notas", v)} />
-      <Campo label="Link de video" value={exercise.video} onChange={(v) => set("video", v)} />
+
+      <div>
+        <label className="mb-1 block text-xs text-muted">Link de video</label>
+        <div className="flex items-start gap-2">
+          <input
+            type="text"
+            className={inputClass}
+            value={exercise.video}
+            onChange={(e) => set("video", e.target.value)}
+          />
+          {/* Preview embebido: para que el profe identifique al toque si
+              es el video correcto, sin tener que abrir el link aparte. */}
+          {exercise.video ? <VideoPreview url={exercise.video} /> : null}
+        </div>
+      </div>
 
       {exercise.notaAlumno || exercise.carga ? (
         <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/5 p-2.5 text-sm">

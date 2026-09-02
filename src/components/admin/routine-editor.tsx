@@ -59,11 +59,10 @@ export function RoutineEditor({
   const [nombre, setNombre] = useState(alumno.alumno);
   const [tipoPlan, setTipoPlan] = useState(alumno.tipoPlan || "Musculo");
   const [fechaCreacion, setFechaCreacion] = useState(alumno.fechaCreacion || "");
-  // Nombre/categoría/fecha sin guardar — los botones "Guardar cambios" (de
-  // arriba y de abajo) también guardan esto, no solo los días.
+  // Nombre/categoría/fecha sin guardar — los 3 botones "Guardar" (el de
+  // Datos del alumno y los 2 "Guardar cambios" de arriba/abajo del plan)
+  // guardan todo junto: esto y los días modificados.
   const [datosModificados, setDatosModificados] = useState(false);
-  const [guardandoDatos, setGuardandoDatos] = useState(false);
-  const [mensajeDatos, setMensajeDatos] = useState("");
   const [eliminando, setEliminando] = useState(false);
   const [duplicando, setDuplicando] = useState(false);
   const [mensajeDuplicar, setMensajeDuplicar] = useState("");
@@ -87,21 +86,6 @@ export function RoutineEditor({
         setError(err instanceof Error ? err.message : "No se pudo cargar la rutina.")
       );
   }, [alumno.id]);
-
-  async function guardarDatosAlumno() {
-    setGuardandoDatos(true);
-    setMensajeDatos("");
-    try {
-      await actualizarAlumno(password, alumno.id, { nombreAlumno: nombre, tipoPlan, fechaCreacion });
-      onAlumnoActualizado({ ...alumno, alumno: nombre, tipoPlan, fechaCreacion });
-      setDatosModificados(false);
-      setMensajeDatos("Guardado.");
-    } catch (err) {
-      setMensajeDatos(err instanceof Error ? err.message : "No se pudo guardar.");
-    } finally {
-      setGuardandoDatos(false);
-    }
-  }
 
   async function duplicar() {
     const nombreNuevo = window.prompt(
@@ -285,11 +269,11 @@ export function RoutineEditor({
           </select>
           <button
             type="button"
-            onClick={guardarDatosAlumno}
-            disabled={guardandoDatos}
+            onClick={guardarTodo}
+            disabled={guardandoTodo}
             className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {guardandoDatos ? "Guardando..." : "Guardar"}
+            {guardandoTodo ? "Guardando..." : "Guardar"}
           </button>
         </div>
 
@@ -311,7 +295,11 @@ export function RoutineEditor({
           </div>
         </div>
 
-        {mensajeDatos ? <p className="mt-2 text-sm text-muted">{mensajeDatos}</p> : null}
+        {mensajeGuardado ? (
+          <p className={`mt-2 text-sm ${mensajeGuardado === "Guardado." ? "text-primary" : "text-red-400"}`}>
+            {mensajeGuardado}
+          </p>
+        ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
           <span>Link del alumno:</span>
           <a

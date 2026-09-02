@@ -158,12 +158,9 @@ export function ExerciseRowEditor({
           {/* Sale solo del catálogo (según el ejercicio elegido) — no se
               edita a mano acá; si está mal, se corrige en EjerciciosConsolidado.
               El preview embebido es para identificar al toque si es el
-              correcto, y el link chiquito abajo queda de referencia. */}
+              correcto. */}
           {exercise.video ? (
-            <div className="inline-flex flex-col items-start gap-1">
-              <VideoPreview url={exercise.video} />
-              <p className="max-w-24 break-all text-[11px] text-muted">{exercise.video}</p>
-            </div>
+            <VideoPreview url={exercise.video} />
           ) : (
             <p className="max-w-24 text-xs text-muted">Sin video para este ejercicio.</p>
           )}

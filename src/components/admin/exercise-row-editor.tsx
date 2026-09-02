@@ -171,11 +171,13 @@ export function ExerciseRowEditor({
         <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/5 p-2.5 text-sm">
           <div>
             <p className="text-xs text-muted">Carga del alumno</p>
-            <p className="text-foreground">{exercise.carga || "—"}</p>
+            {/* Un envío por renglón (ver NotaCargaAlumno) — whitespace-pre-line
+                para que cada uno se vea en su propia línea. */}
+            <p className="whitespace-pre-line text-foreground">{exercise.carga || "—"}</p>
           </div>
           <div>
             <p className="text-xs text-muted">Nota del alumno</p>
-            <p className="text-foreground">{exercise.notaAlumno || "—"}</p>
+            <p className="whitespace-pre-line text-foreground">{exercise.notaAlumno || "—"}</p>
           </div>
         </div>
       ) : null}

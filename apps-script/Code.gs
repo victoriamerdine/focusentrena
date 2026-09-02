@@ -1581,6 +1581,13 @@ function manejarGuardarDia(ss, datos) {
 // nunca pisa ni es pisado por una edición del entrenador. "indice" es la
 // posición 0-based del ejercicio dentro del día (el mismo que manda
 // construirRutina en cada ejercicio), no el número de fila real.
+//
+// Cada envío AGREGA un renglón dentro de la misma celda (separado por
+// salto de línea) en vez de pisar el anterior — así el alumno va viendo
+// su propio historial (cuánto levantó cada vez que hizo ese ejercicio),
+// no solo el último valor. Carga y nota se leen de vuelta con
+// getValues() (no getRange().getValue() suelto) para no pisar un envío
+// que haya llegado de otro dispositivo/pestaña un instante antes.
 function manejarGuardarNotaAlumno(ss, datos) {
 
   const id = String(datos.id || "").trim();
@@ -1591,6 +1598,10 @@ function manejarGuardarNotaAlumno(ss, datos) {
   if (!diaNombre) throw new Error("Falta el día.");
   if (!Number.isInteger(indice) || indice < 0) throw new Error("Ejercicio inválido.");
 
+  const notaNueva = String(datos.notaAlumno || "").trim();
+  const cargaNueva = String(datos.carga || "").trim();
+  if (!notaNueva && !cargaNueva) throw new Error("No hay nada para guardar.");
+
   const hoja = buscarAlumno(id, ss);
   if (!hoja) throw new Error("No se encontró esa rutina.");
 
@@ -1600,12 +1611,20 @@ function manejarGuardarNotaAlumno(ss, datos) {
   const fila = bloque.filaDatosInicio + indice;
   if (fila > bloque.filaFin) throw new Error("Ese ejercicio ya no existe en este día.");
 
-  hoja.getRange(fila, 10, 1, 2).setValues([[
-    String(datos.notaAlumno || ""),
-    String(datos.carga || ""),
+  const rango = hoja.getRange(fila, 10, 1, 2);
+  const actual = rango.getValues()[0];
+
+  rango.setValues([[
+    agregarRenglon(String(actual[0] || ""), notaNueva),
+    agregarRenglon(String(actual[1] || ""), cargaNueva),
   ]]);
 
   invalidarRutinaCache(id);
+}
+
+function agregarRenglon(actual, nuevo) {
+  const limpio = actual.trim();
+  return limpio ? limpio + "\n" + nuevo : nuevo;
 }
 
 // Ubica, sin modificar nada, el rango de filas de datos de un día: desde
